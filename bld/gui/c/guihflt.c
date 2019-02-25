@@ -37,16 +37,13 @@ bool GUICreateFloatingPopup( gui_window *wnd, gui_point *location,
                              int num_items, const gui_menu_struct *menu,
                              gui_mouse_track track, gui_ctl_id *curr_id )
 {
-    bool            ret;
-    gui_menu_items  menus;
+    bool        ret;
 
     if( ( num_items == 0 ) || ( menu == NULL ) ) {
         return( false );
     }
-    menus.num_items = num_items;
-    menus.menu = menu;
-    GUIInitHint( wnd, &menus, FLOAT_HINT );
-    ret = GUIXCreateFloatingPopup( wnd, location, menus.num_items, menus.menu, track, curr_id );
+    GUIInitHint( wnd, num_items, menu, FLOAT_HINT );
+    ret = GUIXCreateFloatingPopup( wnd, location, num_items, menu, track, curr_id );
     GUIFiniHint( wnd, FLOAT_HINT );
     return( ret );
 }
