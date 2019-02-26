@@ -508,7 +508,7 @@ bool GUIXCreateWindow( gui_window *wnd, gui_create_info *dlg_info, gui_window *p
     }
 
     wnd->font = GUIGetSystemFont();
-    GUIInitHint( wnd, dlg_info->menus.num_items, dlg_info->menus.menu, MENU_HINT );
+    GUIInitHint( wnd, &dlg_info->menus, MENU_HINT );
     GUISetGUIHint( wnd );
     wmcreateinfo.size = sizeof(wmcreate_info);
     wmcreateinfo.wnd  = wnd;
@@ -928,11 +928,11 @@ WPI_MRESULT CALLBACK GUIWindowProc( HWND hwnd, WPI_MSG msg, WPI_PARAM1 wparam, W
         NumWindows++; // even if -1 is returned, window will get WM_DESTROY
         win = GUIGetParentFrameHWND( wnd );
         if( ( wnd->root_frame != NULLHANDLE ) || (dlg_info->style & GUI_POPUP) ) {
-            if( !GUIAddToSystemMenu( wnd, win, 0, NULL, dlg_info->style ) ) {
+            if( !GUIAddToSystemMenu( wnd, win, &NoMenu, dlg_info->style ) ) {
                 return( (WPI_MRESULT)WPI_ERROR_ON_CREATE );
             }
         } else {
-            if( !GUIAddToSystemMenu( wnd, win, dlg_info->menus.num_items, dlg_info->menus.menu, dlg_info->style ) ) {
+            if( !GUIAddToSystemMenu( wnd, win, &dlg_info->menus, dlg_info->style ) ) {
                 return( (WPI_MRESULT)WPI_ERROR_ON_CREATE );
             }
         }

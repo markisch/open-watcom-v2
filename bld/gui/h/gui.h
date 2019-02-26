@@ -2,7 +2,7 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2018-2018 The Open Watcom Contributors. All Rights Reserved.
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -433,6 +433,9 @@ typedef struct gui_menu_items {
     gui_menu_struct         *menu;
 } gui_menu_items;
 
+#define GUI_NO_MENU         {0, NULL}
+#define GUI_MENU_ARRAY(x)   {sizeof( x ) / sizeof( *x ), x}
+
 typedef struct gui_menu_struct {
     const char              *label;
     gui_ctl_id              id;
@@ -450,6 +453,9 @@ typedef struct gui_colour_items {
     int                     num_items;
     gui_colour_set          *colour;
 } gui_colour_items;
+
+#define GUI_NO_COLOUR       {0, NULL}
+#define GUI_COLOUR_ARRAY(x) {sizeof( x ) / sizeof( *x ), x}
 
 typedef unsigned long       gui_rgb;
 
@@ -767,7 +773,7 @@ extern void GUIGetPoint( gui_window *wnd, gui_ord extent, gui_ord row,
 extern const gui_menu_items     NoMenu;
 
 extern bool GUICreateFloatingPopup( gui_window *wnd, gui_point *location,
-                                    int num_items, const gui_menu_struct *menu,
+                                    const gui_menu_items *menus,
                                     gui_mouse_track track, gui_ctl_id *curr_id );
 extern bool GUITrackFloatingPopup( gui_window *wnd, gui_point *location,
                                gui_mouse_track track, gui_ctl_id *curr_id );
@@ -780,9 +786,9 @@ extern bool GUIEnableMDIMenus( bool enable );
 extern bool GUIEnableMenus( gui_window *wnd, bool enable ); // NYI
 extern bool GUIDeleteMenuItem( gui_window *wnd, gui_ctl_id id, bool floating );
 
-extern bool GUIResetMenus( gui_window *wnd, int num_items, const gui_menu_struct *menu );
+extern bool GUIResetMenus( gui_window *wnd, const gui_menu_items *menus );
 
-extern int GUIGetMenuPopupCount( gui_window *wnd, gui_ctl_id id );
+extern int  GUIGetMenuPopupCount( gui_window *wnd, gui_ctl_id id );
 
 extern bool GUIInsertMenuByIdx( gui_window *wnd, int position, const gui_menu_struct *menu, bool floating );
 extern bool GUIInsertMenuByID( gui_window *wnd, gui_ctl_id id, const gui_menu_struct *menu );
