@@ -329,7 +329,7 @@ extern void                 *WndRealloc( void *, size_t );
 extern void                 WndFree( void * );
 extern void                 *WndMustAlloc( size_t );
 extern void                 *WndMustRealloc( void *, size_t );
-extern void                 WndCreateFloatingPopup( a_window, gui_point *, gui_menu_items *, gui_ctl_id *id );
+extern void                 WndCreateFloatingPopup( a_window, gui_point *, const gui_menu_items *, gui_ctl_id *id );
 
 extern void                 WndFixedThumb( a_window );
 extern void                 WndSetThumbPos( a_window, int );
@@ -390,6 +390,9 @@ extern WNDENDPAINT          NoEndPaint;
 extern WNDNOTIFY            NoNotify;
 extern WNDNUMROWS           NoNumRows;
 extern WNDNEXTROW           NoNextRow;
+
+#define NoChkFlags          NULL
+#define NoUpdateFlags       0
 
 extern WNDREFRESH           WndRefresh;
 extern WNDGETLINE           WndGetLine;
@@ -558,7 +561,7 @@ extern void                 WndGetGadgetSize( wnd_gadget_type type, gui_coord * 
 extern wnd_attr             WndMapTabAttr( wnd_attr );
 extern char                 WndBackgroundChar;
 
-#define DefPopUp( x )       (sizeof( x ) / sizeof( *(x) )), x
+#define PopUp( x )          (sizeof( x ) / sizeof( *(x) )), x
 #define NoPopUp             0, NULL
 
 #define WndMenuFields( x )  (sizeof( x ) / sizeof( *(x) )), x

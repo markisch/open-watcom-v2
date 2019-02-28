@@ -227,16 +227,13 @@ static bool InsertPopup( gui_window *wnd, gui_ctl_id id, HMENU hpopup, hint_type
     hmenu = GetPopupHMENU( wnd, GUIGetHMENU( wnd ), id, NULL, NULL, type );
     if( hmenu != hpopup ) {
         info = (popup_info *)GUIMemAlloc( sizeof( popup_info ) );
-        if( info != NULL ) {
-            info->next = wnd->popup;
-            wnd->popup = info;
-            info->id = id;
-            info->hpopup = hpopup;
-            info->type = type;
-            return( true );
-        } else {
+        if( info == NULL )
             return( false );
-        }
+        info->next = wnd->popup;
+        wnd->popup = info;
+        info->id = id;
+        info->hpopup = hpopup;
+        info->type = type;
     }
     return( true );
 }
@@ -249,16 +246,14 @@ static void DeletePopup( gui_window *wnd, gui_ctl_id id )
     prev = NULL;
     for( curr = wnd->popup; curr != NULL; prev = curr, curr=curr->next ) {
         if( ( curr->id == id ) && ( curr->type == MENU_HINT ) ) {
+            if( prev != NULL ) {
+                prev->next = curr->next;
+            } else {
+                wnd->popup = curr->next;
+            }
+            GUIMemFree( curr );
             break;
         }
-    }
-    if( curr != NULL ) {
-        if( prev != NULL ) {
-            prev->next = curr->next;
-        } else {
-            wnd->popup = curr->next;
-        }
-        GUIMemFree( curr );
     }
 }
 
@@ -1006,13 +1001,13 @@ static bool AddPopup( gui_window *wnd, gui_ctl_id id, const gui_menu_struct *men
 }
 
 bool GUIInsertMenuToPopup( gui_window *wnd, gui_ctl_id id, int position,
-                           const gui_menu_struct *menu, bool floating )
+                                const gui_menu_struct *menu, bool floating )
 {
     return( AddPopup( wnd, id, menu, true, position, floating ) );
 }
 
-bool GUIAppendMenuToPopup( gui_window *wnd, gui_ctl_id id, const gui_menu_struct *menu,
-                           bool floating )
+bool GUIAppendMenuToPopup( gui_window *wnd, gui_ctl_id id,
+                                const gui_menu_struct *menu, bool floating )
 {
     return( AddPopup( wnd, id, menu, false, 0, floating ) );
 }

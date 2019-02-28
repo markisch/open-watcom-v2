@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -24,77 +25,12 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS MODULE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  Definition of Dummy (blank) toolbar structure
 *
 ****************************************************************************/
 
 
-#include "app.h"
+#include "guiwind.h"
 
 
-static char * Stuff[] = {
-        "Line 1",
-        "Line 2",
-        "Line 3",
-        "Line 4",
-        "Line 5",
-};
-
-static wnd_row W6NumRows( a_window wnd )
-{
-    wnd=wnd;
-    return( ArraySize( Stuff ) );
-}
-
-static bool    W6GetLine( a_window wnd, wnd_row row, wnd_piece piece, wnd_line_piece *line )
-{
-    wnd=wnd;
-    if( row >= ArraySize( Stuff ) )
-        return( false );
-    if( piece != 0 )
-        return( false );
-    line->text = Stuff[row];
-    return( true );
-}
-
-
-static void    W6Refresh( a_window wnd )
-{
-    WndSetRepaint( wnd );
-}
-
-static wnd_metrics W6Metrics = { 3, 12, 0, 0 };
-
-static wnd_info W6Info = {
-    NoWndEventProc,
-    W6Refresh,
-    W6GetLine,
-    NoMenuItem,
-    NoScroll,
-    NoBegPaint,
-    NoEndPaint,
-    NoModify,
-    W6NumRows,
-    NoNextRow,
-    NoNotify,
-    NoChkFlags,
-    NoUpdateFlags,
-    NoPopUp
-};
-
-a_window W6Open( void )
-{
-    wnd_create_struct   info;
-    a_window            wnd;
-
-    WndInitCreateStruct( &info );
-    info.info = &W6Info;
-    info.style |= GUI_INIT_INVISIBLE | GUI_POPUP;
-    wnd = WndCreateWithStruct( &info );
-    WndSetFontInfo( wnd, "-13 0 0 0 700 0 0 0 0 1 2 1 18 \"MS Serif\"" );
-    WndForcePaint( wnd );
-    WndShrinkToMouse( wnd, &W6Metrics );
-    GUIShowWindow( WndGui( wnd ) );
-    return( wnd );
-}
+const gui_toolbar_items     NoToolbar = GUI_NO_TOOLBAR;
