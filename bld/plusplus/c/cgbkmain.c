@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -1399,7 +1400,7 @@ static FN_CTL* emit_virtual_file(   // EMIT A VIRTUAL FILE
     dtor_kind = 0;
     dtor_last_reqd = NULL;
 
-    curr_seg = UNDEFSEG;
+    curr_seg = (segment_id)-1;
     lbl = NULL;
     exprn_type = TY_UNKNOWN;
     lvalue_type = TY_UNKNOWN;
@@ -1778,9 +1779,9 @@ static FN_CTL* emit_virtual_file(   // EMIT A VIRTUAL FILE
           { cg_name ref;                    // - reference operand
             cg_type far_type;               // - type of pointer
             TYPE type;                      // - type of ref. variable
-            fe_seg_id seg_id;               // - PC Segment ID
-            seg_id = ((SYMBOL)ins_value.pvalue)->segid;
-            SegmentLabelGen( seg_id );
+            fe_seg_id segid;               // - PC Segment ID
+            segid = ((SYMBOL)ins_value.pvalue)->segid;
+            SegmentLabelGen( segid );
             type = ((SYMBOL)ins_value.pvalue)->sym_type;
             if( FunctionDeclarationType( type ) == NULL ) {
                 far_type = TY_LONG_POINTER;
