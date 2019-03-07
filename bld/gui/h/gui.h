@@ -608,7 +608,7 @@ typedef struct gui_timer_event {
 
 /* Initialization Functions */
 
-extern bool GUIWndInit( unsigned rate, gui_window_styles style );
+extern bool GUIWndInit( unsigned dclick_ms, gui_window_styles style );
 extern void GUIGMouseOn( void );
 extern void GUIGMouseOff( void );
 extern void GUIMDIInit( void );
@@ -620,7 +620,7 @@ extern void GUIGetRoundScale( gui_coord *scale );
 extern void GUISetScale( gui_rect *screen );
 extern void GUIGetScale( gui_rect *screen );
 extern void GUIGetScreen( gui_rect *rect );
-extern void GUISetDClickRate( unsigned rate );
+extern void GUISetDClickRate( unsigned dclick_ms );
 extern void GUISetCharacter( gui_draw_char draw_char, int new_char );
 extern int  GUIGetCharacter( gui_draw_char draw_char );
 extern bool GUIIsInit( void );
