@@ -1188,7 +1188,7 @@ static void SetDataSegName( void )
 {
     SwData.nd_used = true;
     DataSegName = CopyOfParm();
-    SegData = -1;
+    ImportNearSegIdInit();
     if( *DataSegName == '\0' ) {
         CMemFree( DataSegName );
         DataSegName = NULL;
@@ -2122,7 +2122,7 @@ static void InitCPUModInfo( void )
     TargetSwitches = 0;
     TargSys = TS_OTHER;
 #if _CPU == _AXP || _CPU == _PPC || _CPU == _SPARC || _CPU == _MIPS
-    TextSegName = ".text";
+    TextSegName = "";
     DataSegName = ".data";
     GenCodeGroup = "";
     DataPtrSize = TARGET_POINTER;

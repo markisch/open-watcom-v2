@@ -72,9 +72,11 @@ static seg_name Predefined_Segs[] = {
 
 #define FIRST_USER_SEGMENT      10000
 
-static  user_seg    *userSegments;
-static  segment_id  userSegId;
+static user_seg     *userSegments;
+static segment_id   userSegId;
 
+static segment_id   import_segid      = SEG_UNKNOWN;    /* next segment # for import sym */
+static segment_id   import_near_segid = SEG_UNKNOWN;    /* data seg # for -nd option */
 
 void AssignSeg( SYMPTR sym )
 {
@@ -95,9 +97,9 @@ void AssignSeg( SYMPTR sym )
             SetSegAlign( sym );
         }
     } else if( sym->mods & (FLAG_FAR | FLAG_HUGE) ) {
-        sym->u.var.segid = SegImport--;
-    } else if( (SegData != SEG_UNKNOWN) && (sym->mods & FLAG_NEAR) ) {  // imported and near
-        sym->u.var.segid = SegData;
+        sym->u.var.segid = import_segid--;
+    } else if( (import_near_segid != SEG_UNKNOWN) && (sym->mods & FLAG_NEAR) ) {  // imported and near
+        sym->u.var.segid = import_near_segid;
     }
 }
 
@@ -582,21 +584,17 @@ void    SetSegs( void )
     segment_id      segid;
     user_seg        *useg;
     textsegment     *tseg;
-    int             flags;
     char            *name;
     align_type      optsize_segalign;
 
     CompFlags.low_on_memory_printed = false;
-    flags = GLOBAL | INIT | EXEC;
-    if( *TextSegName == '\0' ) {
-        name = TS_SEG_CODE;
-    } else {
-        name = TextSegName;
-        flags |= GIVEN_NAME;
-    }
     optsize_segalign = ( OptSize == 0 ) ? (align_type)BETypeLength( TY_INTEGER ) : 1;
 
-    BEDefSeg( SEG_CODE, flags, name, SegAlign( optsize_segalign ) );
+    if( *TextSegName == '\0' ) {
+        BEDefSeg( SEG_CODE, GLOBAL | INIT | EXEC, TS_SEG_CODE, SegAlign( optsize_segalign ) );
+    } else {
+        BEDefSeg( SEG_CODE, GLOBAL | INIT | EXEC | GIVEN_NAME, TextSegName, SegAlign( optsize_segalign ) );
+    }
     BEDefSeg( SEG_CONST, BACK|INIT|ROM, TS_SEG_CONST, SegAlign( SegAlignment[SEG_CONST] ) );
     BEDefSeg( SEG_CONST2, INIT | ROM, TS_SEG_CONST2, SegAlign( SegAlignment[SEG_CONST2] ) );
     BEDefSeg( SEG_DATA,  GLOBAL | INIT, TS_SEG_DATA, SegAlign( SegAlignment[SEG_DATA] ) );
@@ -609,7 +607,7 @@ void    SetSegs( void )
         BEDefSeg( SEG_BSS, GLOBAL, TS_SEG_BSS, SegAlign( SegAlignment[SEG_BSS] ) );
     }
     if( CompFlags.far_strings ) {
-        FarStringSegment = SegmentNum++;
+        FarStringSegId = SegmentNum++;
     }
     name = CMemAlloc( strlen( ModuleName ) + 10 + sizeof( "_DATA" ) );
     for( segid = FIRST_PRIVATE_SEGMENT; segid < SegmentNum; ++segid ) {
@@ -840,7 +838,7 @@ segment_id FESegID( CGSYM_HANDLE cgsym_handle )
             } else if( attr & FE_IMPORT ) {
                 if( (sym->mods & FLAG_FAR) || (TargetSwitches & BIG_CODE) ) {
                     if( sym->flags & SYM_ADDR_TAKEN ) {
-                        segid = SegImport--;
+                        segid = import_segid--;
                     }
                 }
             }
@@ -991,5 +989,19 @@ void SetSegAlign( SYMPTR sym )
         if( SegAlignment[segid] < align ) {
             SegAlignment[segid] = align;
         }
+    }
+}
+
+void ImportNearSegIdInit( void )
+{
+    import_near_segid = -1;
+}
+
+void ImportSegIdInit( void )
+{
+    if( import_near_segid != SEG_UNKNOWN ) {
+        import_segid = import_near_segid - 1;
+    } else {
+        import_segid = -1;
     }
 }
