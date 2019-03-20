@@ -44,7 +44,7 @@
 #define EMS_IO_ERROR    ((size_t)-1)
 
 ems_struct              EMSCtrl;
-static unsigned long    *emsPtrs;
+static long             *emsPtrs;
 
 static size_t   emsRead( long, void __far *, size_t );
 static size_t   emsWrite( long, void __far *, size_t );
@@ -136,12 +136,12 @@ vi_rc SwapToMemoryFromEMSMemory( fcb *fb )
 /*
  * eMSAlloc - allocate some expanded memory
  */
-static long eMSAlloc( U_INT size )
+static long eMSAlloc( unsigned size )
 {
     unsigned char       handle;
     ems_addr            h;
 
-    size = ( size + 1 ) & ~1;
+    size = ROUNDUP( size, 2 );
     if( size > EMS_MAX_PAGE_SIZE || EMSCtrl.exhausted ) {
         return( 0 );
     }
@@ -243,7 +243,7 @@ void EMSInit( void )
  */
 void EMSFini( void )
 {
-    U_INT       curr;
+    unsigned    curr;
 
     if( !EMSCtrl.inuse ) {
         return;
@@ -291,7 +291,7 @@ static bool locatePhysicalPage( unsigned char h, unsigned char l, unsigned char 
 static void *emsAccess( ems_addr x )
 {
     unsigned char       handle, logical, physical;
-    U_INT               offset;
+    unsigned            offset;
 
     if( x.external == 0 ) {
         return( NULL );
