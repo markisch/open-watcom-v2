@@ -94,23 +94,19 @@ void FcbFree( fcb *cfcb )
     if( cfcb->offset >= 0 ) {
         GiveBackSwapBlock( cfcb->offset );
     }
-#if defined( __DOS__ )
-    if( cfcb->xmemaddr != 0 ) {
-  #if defined( USE_EMS )
-        if( cfcb->in_ems_memory ) {
-            GiveBackEMSBlock( cfcb->xmemaddr );
-        }
-  #endif
-  #if defined( USE_XTD )
-        if( cfcb->in_extended_memory ) {
-            GiveBackXMemBlock( cfcb->xmemaddr );
-        }
-  #endif
-  #if defined( USE_XMS )
-        if( cfcb->in_xms_memory ) {
-            GiveBackXMSBlock( cfcb->xmemaddr );
-        }
-  #endif
+#if defined( USE_EMS )
+    if( cfcb->in_ems_memory && cfcb->xblock.handle != 0 ) {
+        GiveBackEMSBlock( cfcb->xblock.handle );
+    }
+#endif
+#if defined( USE_XTD )
+    if( cfcb->in_extended_memory && cfcb->xblock.addr != 0 ) {
+        GiveBackXMemBlock( cfcb->xblock.addr );
+    }
+#endif
+#if defined( USE_XMS )
+    if( cfcb->in_xms_memory && cfcb->xblock.handle != 0 ) {
+        GiveBackXMSBlock( cfcb->xblock.handle );
     }
 #endif
 

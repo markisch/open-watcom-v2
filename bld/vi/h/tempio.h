@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -24,13 +25,10 @@
 *
 *  ========================================================================
 *
-* Description:  Check DOS memory blocks access routines.
+* Description:  Temporary file/directory related routines
 *
 ****************************************************************************/
 
 
-extern void XcleanUp( where_parm where );
-extern bool XchkOpen( where_parm where, char *f_buff );
-extern void XchkClose( where_parm where );
-extern bool XchkWrite( where_parm where, __segment buff, unsigned *size );
-extern bool XchkRead( where_parm where, __segment *buff );
+extern void     VerifyTmpDir( void );
+extern char     *MakeTmpPath( char *out, const char *in );

@@ -25,25 +25,22 @@
 *
 *  ========================================================================
 *
-* Description:  Check DOS memory blocks for consistency.
+* Description:  DOS memory Swap handling configuration.
 *
 ****************************************************************************/
 
 
-#include "dosswpcf.h"
-
-
-typedef enum {
-    IN_EMS,
-    IN_XMS,
-    ON_DISK
-} where_parm;
-
-typedef unsigned long   xhandle;
-
-extern bool CheckPointMem( where_parm where, unsigned max, char *f_buff );
-extern void CheckPointRestore( where_parm where );
-
-#if defined( USE_XMEM )
-extern void XSwapInit( int count, xhandle *handles, unsigned short *sizes );
+#if defined( _M_IX86 )
+    #if _M_IX86 == 200
+        #define USE_XMEM
+        #define USE_XMS
+        #define USE_EMS
+        #define USE_XTD
+    #elif _M_IX86 < 200
+        #define USE_XMEM
+        #define USE_EMS
+    #endif
+#elif defined( _M_I86 )
+    #define USE_XMEM
+    #define USE_EMS
 #endif
