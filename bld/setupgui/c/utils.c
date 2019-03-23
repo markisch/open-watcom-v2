@@ -89,8 +89,6 @@ typedef struct def_var {
 bool            ConfigModified = false;
 static enum { SRC_UNKNOWN, SRC_CD, SRC_DISK } SrcInstState;
 
-extern int      IsPatch;
-extern bool     CancelSetup;
 bool            SkipDialogs;
 char            *VariablesFile;
 DEF_VAR         *ExtraVariables;
@@ -1525,7 +1523,6 @@ COPYFILE_ERROR DoCopyFile( const VBUF *src_path, const VBUF *dst_path, bool appe
 typedef struct split_file {
     struct split_file   *next;
     char                *src_path;
-    char                *disk_desc;     // a file may span multiple disks
 } split_file;
 
 #define OVERHEAD_SIZE 10000 // removing a file is about like copying a small file
@@ -1758,8 +1755,8 @@ static void CopySetupInfFile( void )
     VbufFree( &dst_path );
 }
 
-static int UnPackHook( int filenum, int subfilenum, VBUF *name )
-/**************************************************************/
+static int checkForNewName( int filenum, int subfilenum, VBUF *name )
+/*******************************************************************/
 {
     VBUF        ext;
     int         rc;
@@ -1792,7 +1789,6 @@ static bool DoCopyFiles( void )
 /*****************************/
 {
     int                 filenum;
-//    int                 disk_num;
     int                 subfilenum, max_subfiles;
     COPYFILE_ERROR      copy_error;
 //    VBUF                dst_path;
@@ -1802,7 +1798,6 @@ static bool DoCopyFiles( void )
     VBUF                file_desc;
     VBUF                dir;
     VBUF                tmp;
-//    VBUF                disk_desc;
     VBUF                old_dir;
     long                num_total_install;
     long                num_installed;
@@ -1836,9 +1831,6 @@ static bool DoCopyFiles( void )
         SimFileDir( filenum, &dir );
         if( SimFileAdd( filenum ) && !SimFileUpToDate( filenum ) ) {
             num_total_install += SimFileSize( filenum );
-            if( SimFileSplit( filenum ) ) {
-                num_total_install += SimFileSize( filenum );
-            }
             max_subfiles = SimNumSubFiles( filenum );
             for( subfilenum = 0; subfilenum < max_subfiles; ++subfilenum ) {
                 if( SimSubFileReadOnly( filenum, subfilenum ) ) {
@@ -1947,8 +1939,6 @@ static bool DoCopyFiles( void )
                 SimFileDir( filenum, &dir );
                 SimGetFileDesc( filenum, &file_desc );
 //                SimGetFileName( filenum, &file_name );
-//                disk_num = SimFileDisk( filenum, &disk_desc );
-//                SimFileDisk( filenum, &disk_desc );
 
 //                _splitpath( file_desc, NULL, NULL, NULL, file_ext );
 //                VbufMakepath( &dst_path, NULL, &dir, &file_desc, NULL );
@@ -1986,7 +1976,7 @@ static bool DoCopyFiles( void )
                         VbufSetLen( &src_path, src_path_pos2 );     // nuke name from end of src_path
                         VbufConcVbuf( &src_path, &file_desc );
                         StatusLinesVbuf( STAT_COPYINGFILE, &tmp_path );
-                        UnPackHook( filenum, subfilenum, &tmp_path );
+                        checkForNewName( filenum, subfilenum, &tmp_path );
                         copy_error = DoCopyFile( &src_path, &tmp_path, false );
 
                         switch( copy_error ) {

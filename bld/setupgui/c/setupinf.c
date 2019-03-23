@@ -160,7 +160,6 @@ typedef enum {
 typedef enum {
     RS_UNDEFINED,
     RS_APPLICATION,
-    RS_DISKS,
     RS_DIRS,
     RS_FILES,
     RS_PMINFO,
@@ -200,11 +199,6 @@ typedef struct dialog_info {    // structure used when parsing a dialog
     int                 col_num;
 } DIALOG_INFO;
 
-extern char             *TrimQuote(char*);
-extern bool             SkipDialogs;
-extern bool             VisibilityCondition;
-extern char             *VariablesFile;
-
 #define defvar( x, y ) vhandle x;
 MAGICVARS( defvar, 0 )
 NONMAGICVARS( defvar, 0 )
@@ -215,7 +209,6 @@ static struct setup_info {
     char                *pm_group_file_name;
     char                *pm_group_name;
     char                *pm_group_icon;
-    array_info          disks;
     array_info          dirs;
     array_info          files;
     array_info          pm_files;
@@ -248,11 +241,6 @@ static struct patch_info {
     char                *condition;
 } *PatchInfo = NULL;
 #endif
-
-static struct disk_info {
-    char                *desc;
-} *DiskInfo = NULL;
-
 
 static struct dir_info {
     char                *desc;
@@ -299,14 +287,12 @@ static struct file_info {
     char                *filename;
     int                 dir_index;
     int                 old_dir_index;
-    int                 disk_index;
     int                 num_files;
     a_file_info         *files;
     union {
         file_cond_info  *p;
         int             i;
     } condition;
-    char                file_type;
     bool                add             : 1;
     bool                remove          : 1;
     bool                supplemental    : 1;
@@ -373,7 +359,6 @@ static char             *ReadBuf;
 static size_t           ReadBufSize;
 static char             *RawReadBuf;
 static char             *RawBufPos;
-extern gui_coord        GUIScale;
 static int              MaxWidthChars;
 static int              CharWidth;
 
@@ -965,7 +950,9 @@ static bool dialog_static( char *next, DIALOG_INFO *dlg )
     VbufInit( &text );
     line = next; next = NextToken( line, '"' );
     line = next; next = NextToken( line, '"' );
-    VbufConcStr( &text, line );
+    if( line != NULL ) {
+        VbufConcStr( &text, line );
+    }
     line = next; next = NextToken( line, ',' );
     line = next; next = NextToken( line, ',' );
     if( EvalCondition( line ) ) {
@@ -1687,9 +1674,6 @@ static bool ProcLine( char *line, pass_type pass )
             State = RS_TERMINATE;
         } else if( stricmp( line, "[Application]" ) == 0 ) {
             State = RS_APPLICATION;
-        } else if( stricmp( line, "[Disks]" ) == 0 ) {
-            State = RS_DISKS;
-            LineCountPointer = &SetupInfo.disks.alloc;
         } else if( stricmp( line, "[Dirs]" ) == 0 ) {
             State = RS_DIRS;
             LineCountPointer = &SetupInfo.dirs.alloc;
@@ -1879,13 +1863,6 @@ static bool ProcLine( char *line, pass_type pass )
         }
         break;
 
-    case RS_DISKS:
-        num = SetupInfo.disks.num;
-        if( !BumpArray( &SetupInfo.disks ) )
-            return( false );
-        DiskInfo[num].desc = GUIStrDup( line, NULL );
-        break;
-
     case RS_DIRS:
         num = SetupInfo.dirs.num;
         if( !BumpArray( &SetupInfo.dirs ) )
@@ -1975,10 +1952,6 @@ static bool ProcLine( char *line, pass_type pass )
         if( FileInfo[num].old_dir_index != -1 ) {
             FileInfo[num].old_dir_index--;
         }
-        line = next; next = NextToken( line, ',' );
-        FileInfo[num].disk_index = get36( line ) - 1;
-        line = next; next = NextToken( line, ',' );
-        FileInfo[num].file_type = tolower( *line );
         line = next; next = NextToken( line, ',' );
         FileInfo[num].condition.i = NewFileCond( line );
         break;
@@ -2573,7 +2546,6 @@ long SimInit( const VBUF *inf_name )
         return( SIM_INIT_NOFILE );
     }
 #endif
-    InitArray( (void **)&DiskInfo, sizeof( struct disk_info ), &SetupInfo.disks );
     InitArray( (void **)&DirInfo, sizeof( struct dir_info ), &SetupInfo.dirs );
     InitArray( (void **)&FileInfo, sizeof( struct file_info ), &SetupInfo.files );
     InitArray( (void **)&PMInfo, sizeof( struct pm_info ), &SetupInfo.pm_files );
@@ -2707,18 +2679,6 @@ const char *SimGetTargTempDisk( int parm )
 
 /*
  * =======================================================================
- * API to DiskInfo[]
- * =======================================================================
- */
-
-int SimGetNumDisks( void )
-/************************/
-{
-    return( SetupInfo.disks.num );
-}
-
-/*
- * =======================================================================
  * API to DirInfo[]
  * =======================================================================
  */
@@ -2814,19 +2774,6 @@ long SimSubFileSize( int parm, int subfile )
 }
 
 
-int SimFileDisk( int parm, VBUF *buff )
-/*************************************/
-{
-    VbufSetStr( buff, DiskInfo[FileInfo[parm].disk_index].desc );
-    return( FileInfo[parm].disk_index );
-}
-
-int SimFileDiskNum( int parm )
-/****************************/
-{
-    return( FileInfo[parm].disk_index );
-}
-
 void SimFileDir( int parm, VBUF *buff )
 /*************************************/
 {
@@ -2848,26 +2795,6 @@ bool SimFileOldDir( int parm, VBUF *buff )
     }
     SimGetDir( FileInfo[parm].old_dir_index, buff );
     return( true );
-}
-
-bool SimFileSplit( int parm )
-/***************************/
-{
-    return( FileInfo[parm].file_type == '1' ||
-            FileInfo[parm].file_type == 'm' ||
-            FileInfo[parm].file_type == '$' );
-}
-
-static bool SimFileFirstSplit( int parm )
-/***************************************/
-{
-    return( FileInfo[parm].file_type == '1' );
-}
-
-bool SimFileLastSplit( int parm )
-/*******************************/
-{
-    return( FileInfo[parm].file_type == '$' );
 }
 
 int SimNumSubFiles( int parm )
@@ -3403,9 +3330,7 @@ static bool CheckDLLSupplemental( int i, const VBUF *filename )
         if( VbufCompStr( &ext, ".DLL", true ) == 0 ) {
             VBUF        file_desc;
             VBUF        dir;
-//            char        disk_desc[MAXBUF];
 //            VBUF        file_name;
-//            int         disk_num;
             VBUF        dst_path;
             bool        flag;
             int         m;
@@ -3416,7 +3341,6 @@ static bool CheckDLLSupplemental( int i, const VBUF *filename )
             SimFileDir( i, &dir );
             SimGetFileDesc( i, &file_desc );
 //            SimGetFileName( i, &file_name );
-//            disk_num = SimFileDisk( i, &disk_desc );
             VbufMakepath( &dst_path, NULL, &dir, &file_desc, NULL );
             VbufFree( &file_desc );
             VbufFree( &dir );
@@ -3456,13 +3380,10 @@ void SimCalcAddRemove( void )
     bool                add;
     bool                uninstall;
     bool                remove;
-    long                diskette;
-    disk_size           tmp_size = 0;
     vhandle             reinstall;
     bool                ok;
 
     // for each file that will be installed, total the size
-    diskette = strtol( GetVariableStrVal( "DisketteSize" ), NULL, 10 );
     if( NeedInitAutoSetValues ) {
         InitAutoSetValues();
     }
@@ -3502,16 +3423,6 @@ void SimCalcAddRemove( void )
         }
         if( add ) {
             MarkUsed( dir_index );
-            if( SimFileFirstSplit( i ) ) {
-                tmp_size = diskette;
-            } else if( SimFileLastSplit( i ) ) {
-                tmp_size += diskette;
-                if( tmp_size > TargetInfo[targ_index].max_tmp_file ) {
-                    TargetInfo[targ_index].max_tmp_file = tmp_size;
-                }
-            } else if( SimFileSplit( i ) ) {
-                tmp_size += diskette;
-            }
             DirInfo[dir_index].num_files += FileInfo[i].num_files;
         }
         TargetInfo[targ_index].num_files += FileInfo[i].num_files;
@@ -4197,17 +4108,6 @@ static void FreeTargetVal( void )
 }
 
 
-static void FreeDiskInfo( void )
-/******************************/
-{
-    int i;
-    for( i = 0; i < SetupInfo.disks.num; i++ ) {
-        GUIMemFree( DiskInfo[i].desc );
-    }
-    GUIMemFree( DiskInfo );
-}
-
-
 static void FreeDirInfo( void )
 /*****************************/
 {
@@ -4435,7 +4335,6 @@ void FreeAllStructs( void )
 /*************************/
 {
     FreeTargetVal();
-    FreeDiskInfo();
     FreeDirInfo();
     FreeFileInfo();
     FreeFileCondInfo();
