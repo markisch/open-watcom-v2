@@ -2,7 +2,6 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -25,13 +24,15 @@
 *
 *  ========================================================================
 *
-* Description:  User Interface (UI) memory management interface.
+* Description:  wpack routines used to decode files.
 *
 ****************************************************************************/
 
 
-extern void     *uimalloc( size_t );
-extern void     uifree( void * );
-extern void     *uirealloc( void *old, size_t size );
-extern void     UIMemOpen( void );
-extern void     UIMemClose( void );
+extern unsigned short   GetByte(void);
+extern int              DecodePosition( void );
+extern void             AssignCodes( int num );
+extern void             NoShannonDecode( unsigned long textsize );
+extern void             DoDecode( unsigned long textsize );
+extern bool             DecodeFile( file_info *info, arccmd *cmd );
+extern int              Decode( arccmd *cmd );

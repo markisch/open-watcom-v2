@@ -40,7 +40,7 @@
         #include "os2mem.h"
     #endif
 #else
-    #include "uimem.h"
+    #include "stdui.h"
     #include "helpmem.h"
 #endif
 #ifdef TRMEM
@@ -52,7 +52,7 @@
 static _trmem_hdl  GUIMemHandle;
 
 static FILE *GUIMemFP = NULL;           /* stream to put output on */
-static int  GUIMemOpened = 0;
+static bool GUIMemOpened = false;
 
 static void GUIMemPrintLine( void *parm, const char *buff, size_t len )
 /*********************************************************************/
@@ -61,10 +61,12 @@ static void GUIMemPrintLine( void *parm, const char *buff, size_t len )
 
     fwrite( buff, 1, len, GUIMemFP );
 }
+#if 0
 static void UIMemPrintLine( void *parm, const char *buff, size_t len )
 {
     /* unused parameters */ (void)parm; (void)buff; (void)len;
 }
+#endif
 #endif
 
 void GUIMemPrtUsage( void )
@@ -113,12 +115,12 @@ void GUIMemOpen( void )
         if( tmpdir != NULL ) {
             GUIMemFP = fopen( tmpdir, "w" );
         }
-        GUIMemOpened = 1;
+        GUIMemOpened = true;
     }
 #endif
 }
 #if !defined( GUI_IS_GUI )
-void UIMemOpen( void ) {}
+void UIAPI UIMemOpen( void ) {}
 void HelpMemOpen( void ) {}
 #endif
 
@@ -134,7 +136,7 @@ void GUIMemClose( void )
 #endif
 }
 #if !defined( GUI_IS_GUI )
-void UIMemClose( void ) {}
+void UIAPI UIMemClose( void ) {}
 void HelpMemClose( void ) {}
 #endif
 
@@ -184,7 +186,7 @@ void *PMmalloc( size_t size )
 }
 #endif
 #else
-void *uimalloc( size_t size )
+void * UIAPI uimalloc( size_t size )
 {
 #ifdef TRMEM
     return( _trmem_alloc( size, _trmem_guess_who(), GUIMemHandle ) );
@@ -244,7 +246,7 @@ void PMfree( void *ptr )
 }
 #endif
 #else
-void uifree( void *ptr )
+void UIAPI uifree( void *ptr )
 {
 #ifdef TRMEM
     _trmem_free( ptr, _trmem_guess_who(), GUIMemHandle );
@@ -304,7 +306,7 @@ void *PMrealloc( void *ptr, size_t size )
 }
 #endif
 #else
-void *uirealloc( void *old, size_t size )
+void * UIAPI uirealloc( void *old, size_t size )
 {
 #ifdef TRMEM
     return( _trmem_realloc( old, size, _trmem_guess_who(), GUIMemHandle ) );
