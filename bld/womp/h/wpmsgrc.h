@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -24,93 +25,13 @@
 *
 *  ========================================================================
 *
-* Description:  Dummy data source file I/O routines (local files only)
+* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
+*               DESCRIBE IT HERE!
 *
 ****************************************************************************/
 
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "wio.h"
-#include "setup.h"
-#include "setupio.h"
+#define MSG_RC_BASE 16
+#define MSG_USE_BASE 200
 
-
-typedef struct file_handle_t {
-    FILE        *fp;
-} *file_handle;
-
-int FileInit( const VBUF *archive )
-{
-    /* unused parameters */ (void)archive;
-    return( 0 );
-}
-
-
-int FileFini( void )
-{
-    return( 0 );
-}
-
-
-int FileIsPlainFS( void )
-{
-    return( 1 );
-}
-
-
-int FileIsArchive( void )
-{
-    return( 0 );
-}
-
-
-int FileStat( const VBUF *path, struct stat *buf )
-{
-    return( stat_vbuf( path, buf ) );
-}
-
-
-file_handle FileOpen( const VBUF *path, const char *flags )
-{
-    file_handle fh;
-
-    fh = malloc( sizeof( *fh ) );
-    if( fh == NULL )
-        return( NULL );
-
-    fh->fp = fopen_vbuf( path, flags );
-    if( fh->fp == NULL ) {
-        free( fh );
-        fh = NULL;
-    }
-    return( fh );
-}
-
-
-int FileClose( file_handle fh )
-{
-    int             rc;
-
-    rc = fclose( fh->fp );
-    free( fh );
-
-    return( rc );
-}
-
-
-long FileSeek( file_handle fh, long offset, int origin )
-{
-    if( fseek( fh->fp, offset, origin ) ) {
-        return( -1 );
-    } else {
-        return( ftell( fh->fp ) );
-    }
-}
-
-
-size_t FileRead( file_handle fh, void *buffer, size_t length )
-{
-    return( fread( buffer, 1, length, fh->fp ) );
-}
+#include "wmpmsg.gh"
