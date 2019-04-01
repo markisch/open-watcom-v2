@@ -53,13 +53,20 @@
 
 #include "clibext.h"
 
-static void         *LastFile;
+
+static struct {
+    union {
+        file_list   *file;
+        member_list *module;
+    } u;
+} LastFile;
+
 static file_list    **LastLibFile;
 
 void ResetCmdAll( void )
 /**********************/
 {
-    LastFile = NULL;
+    LastFile.u.file = NULL;
     LastLibFile = NULL;
     UsrLibPath = NULL;
 }
@@ -307,11 +314,11 @@ static file_list *AllocNewFile( member_list *member )
 
     _PermAlloc( new_entry, sizeof(file_list) );
     new_entry->next_file = NULL;
-    new_entry->status = DBIFlag;
+    new_entry->flags = DBIFlag;
     new_entry->strtab = NULL;
     new_entry->u.member = member;
     if( member != NULL ) {
-        new_entry->status |= STAT_HAS_MEMBER;
+        new_entry->flags |= STAT_HAS_MEMBER;
     }
     return( new_entry );
 }
@@ -330,7 +337,7 @@ static void *AddObjFile( const char *name, char *member, file_list **filelist )
         new_member->next = NULL;
         _LnkFree( member );
         for( new_entry = CurrSect->files; new_entry != NULL; new_entry = new_entry->next_file ) {
-            if( FNAMECMPSTR( new_entry->file->name.u.ptr, name ) == 0 ) {
+            if( FNAMECMPSTR( new_entry->infile->name.u.ptr, name ) == 0 ) {
                 CmdFlags |= CF_MEMBER_ADDED;
                 if( new_entry->u.member != NULL ) {
                     LinkList( &new_entry->u.member, new_member );
@@ -344,10 +351,10 @@ static void *AddObjFile( const char *name, char *member, file_list **filelist )
     }
     new_entry = AllocNewFile( new_member );
     if( new_member != NULL ) {
-        new_entry->file = AllocUniqueFileEntry( name, UsrLibPath );
-        new_entry->file->flags |= INSTAT_LIBRARY;
+        new_entry->infile = AllocUniqueFileEntry( name, UsrLibPath );
+        new_entry->infile->status |= INSTAT_LIBRARY;
     } else {
-        new_entry->file = AllocFileEntry( name, ObjPath );
+        new_entry->infile = AllocFileEntry( name, ObjPath );
     }
     *filelist = new_entry;
     return( new_entry );
@@ -367,14 +374,14 @@ file_list *AddObjLib( const char *name, lib_priority priority )
         if( lib->priority < priority )
             break;
         /* end search if library already exists with same or a higher priority */
-        if( FNAMECMPSTR( lib->file->name.u.ptr, name ) == 0 ) {
+        if( FNAMECMPSTR( lib->infile->name.u.ptr, name ) == 0 ) {
             return( lib );
         }
     }
     new_owner = owner;
     /* search for library definition with a lower priority */
     for( ; (lib = *owner) != NULL; owner = &lib->next_file ) {
-        if( FNAMECMPSTR( lib->file->name.u.ptr, name ) == 0 ) {
+        if( FNAMECMPSTR( lib->infile->name.u.ptr, name ) == 0 ) {
             /* remove library entry from linked list */
             *owner = lib->next_file;
             break;
@@ -383,8 +390,8 @@ file_list *AddObjLib( const char *name, lib_priority priority )
     /* if we need to add one */
     if( lib == NULL ) {
         lib = AllocNewFile( NULL );
-        lib->file = AllocUniqueFileEntry( name, UsrLibPath );
-        lib->file->flags |= INSTAT_LIBRARY | INSTAT_OPEN_WARNING;
+        lib->infile = AllocUniqueFileEntry( name, UsrLibPath );
+        lib->infile->status |= INSTAT_LIBRARY | INSTAT_OPEN_WARNING;
         LinkState |= LS_LIBRARIES_ADDED;
     }
     /* put it to new position and setup priority */
@@ -411,14 +418,14 @@ static bool AddLibFile( void )
         return( true );
     }
     entry = AllocNewFile( NULL );
-    entry->file = AllocFileEntry( ptr, UsrLibPath );
+    entry->infile = AllocFileEntry( ptr, UsrLibPath );
     entry->next_file = *LastLibFile;
     *LastLibFile = entry;
     LastLibFile = &entry->next_file;
     if( *LastLibFile == NULL ) {        // no file directives found yet
         CurrFList = LastLibFile;
     }
-    entry->file->flags |= INSTAT_USE_LIBPATH;
+    entry->infile->status |= INSTAT_USE_LIBPATH;
     _LnkFree( ptr );
     return( true );
 }
@@ -471,11 +478,11 @@ static bool AddFile( void )
     if( *CurrFList != NULL ) {
         CurrFList = &(*CurrFList)->next_file;
     }
-    LastFile = AddObjFile( ptr, membname, CurrFList );
+    LastFile.u.file = AddObjFile( ptr, membname, CurrFList );
     if( CmdFlags & CF_MEMBER_ADDED ) {
         CurrFList = temp;   // go back to previous entry.
     } else if( membname != NULL ) {     // 1st member added
-        LastFile = ((file_list *)LastFile)->u.member;
+        LastFile.u.module = LastFile.u.file->u.member;
         CmdFlags |= CF_MEMBER_ADDED;
     }
     _LnkFree( ptr );
@@ -507,9 +514,9 @@ static bool AddLib( void )
 
     ptr = FileName( Token.this, Token.len, E_LIBRARY, false );
     result = AddObjLib( ptr, LIB_PRIORITY_MAX );
-    result->status |= STAT_USER_SPECD;
+    result->flags |= STAT_USER_SPECD;
     if( CmdFlags & CF_SET_SECTION ) {
-        result->status |= STAT_LIB_FIXED;
+        result->flags |= STAT_LIB_FIXED;
         if( OvlLevel == 0 ) {
             result->ovlref = 0;
         } else {
@@ -517,7 +524,7 @@ static bool AddLib( void )
         }
     }
     if( CmdFlags & CF_DOING_OPTLIB ) {
-        result->file->flags |= INSTAT_NO_WARNING;
+        result->infile->status |= INSTAT_NO_WARNING;
     }
     DEBUG(( DBG_BASE, "library: %s", ptr ));
     _LnkFree( ptr );
@@ -949,13 +956,13 @@ bool ProcNewSegment( void )
 /********************************/
 // force the start of a new auto-group after the previous object file.
 {
-    if( LastFile == NULL ) {
+    if( LastFile.u.file == NULL ) {
         LnkMsg( LOC+LINE+WRN+MSG_NEWSEG_BEFORE_OBJ, NULL );
     } else {
         if( CmdFlags & CF_MEMBER_ADDED ) {
-            ((member_list *)LastFile)->flags |= MOD_LAST_SEG;
+            LastFile.u.module->flags |= MOD_LAST_SEG;
         } else {
-            ((file_list *)LastFile)->status |= STAT_LAST_SEG;
+            LastFile.u.file->flags |= STAT_LAST_SEG;
         }
     }
     return( true );
