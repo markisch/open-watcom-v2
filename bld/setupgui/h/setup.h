@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -128,8 +129,6 @@ enum {
     #undef pick
 };
 
-#define MAX_DRIVES 10
-
 extern bool             ConfigModified;
 extern gui_window       *MainWnd;
 extern bool             IsPatch;
@@ -139,8 +138,6 @@ extern bool             Invisible;
 extern gui_coord        GUIScale;
 extern char             *VariablesFile;
 extern bool             VisibilityCondition;
-extern gui_colour_set   MainColours[];
-extern gui_colour_set   StatusColours[];
 extern gui_ord          BitMapBottom;
 
 extern void             ReplaceVars( VBUF *dst, const char *src );
