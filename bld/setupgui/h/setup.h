@@ -131,7 +131,6 @@ enum {
 
 extern bool             ConfigModified;
 extern gui_window       *MainWnd;
-extern bool             IsPatch;
 extern bool             CancelSetup;
 extern bool             SkipDialogs;
 extern bool             Invisible;
@@ -141,6 +140,7 @@ extern bool             VisibilityCondition;
 extern gui_ord          BitMapBottom;
 
 extern void             ReplaceVars( VBUF *dst, const char *src );
+#define ReplaceVars1(d) ReplaceVars(d, NULL)
 extern bool             CheckInstallDLL( const VBUF *, vhandle );
 extern bool             CheckInstallNLM( const VBUF *, vhandle );
 extern bool             CreatePMInfo( bool );

@@ -59,25 +59,21 @@
 #include "utils.h"
 #include "setupio.h"
 #include "iopath.h"
-#ifdef PATCH
-    #include "bdiff.h"
-    #include "installp.h"
-    #include "msg.h"
-    #include "exetype.h"
-#endif
 #include "watcom.h"
 #include "dynarray.h"
 
 #include "clibext.h"
 
 
-#define IS_EMPTY(p)     ((p)[0] == '\0' || (p)[0] == '.' && (p)[1] == '\0')
+#define GET36( x )          strtol( x, NULL, 36 )
 
-#define RoundUp( v, r ) (((v) + (r) - 1) & ~(unsigned long)((r)-1))
+#define IS_EMPTY(p)         ((p)[0] == '\0' || (p)[0] == '.' && (p)[1] == '\0')
 
-#define BUF_SIZE        8192
+#define RoundUp( v, r )     (((v) + (r) - 1) & ~(unsigned long)((r)-1))
 
-#define MAX_WINDOW_WIDTH 90
+#define BUF_SIZE            8192
+
+#define MAX_WINDOW_WIDTH    90
 
 #define NONMAGICVARS( x, y ) \
     x( IsDos, y ) \
@@ -96,20 +92,6 @@
     x( IsLinux64, y ) \
     x( IsAlpha, y ) \
     x( HelpFiles, y ) \
-
-#ifdef PATCH
-typedef enum {
-    PATCH_NOTHING,
-    PATCH_COPY_FILE,
-    PATCH_DELETE_FILE,
-    PATCH_FILE,
-    PATCH_MAKE_DIR
-} PATCHCOMMANDTYPE;
-
-typedef enum {
-    REG_EXE             = 0
-} FILETYPE;
-#endif
 
 typedef struct a_file_info {
     VBUF                name;
@@ -177,7 +159,6 @@ typedef enum {
     RS_STATUSLINEMESSAGE,
     RS_MISCMESSAGE,
     RS_LICENSEMESSAGE,
-    RS_PATCH,
     RS_AUTOSET,
     RS_SPAWN,
     RS_RESTRICTIONS,
@@ -219,9 +200,6 @@ static struct setup_info {
     array_info          target;
     array_info          label;
     array_info          upgrade;
-#ifdef PATCH
-    array_info          patch_files;
-#endif
     array_info          spawn;
     array_info          delete;
     array_info          fileconds;
@@ -230,17 +208,6 @@ static struct setup_info {
     array_info          all_pm_groups;
     array_info          associations;
 } SetupInfo;
-
-#ifdef PATCH
-static struct patch_info {
-    PATCHCOMMANDTYPE    command;
-    char                *destdir;
-    char                *destfile;
-    char                *srcfile;
-    char                *exetype;
-    char                *condition;
-} *PatchInfo = NULL;
-#endif
 
 static struct dir_info {
     char                *desc;
@@ -256,9 +223,9 @@ static struct target_info {
     char                *name;
     disk_ssize          space_needed;
     int                 num_files;
-    int                 supplemental;
-    bool                needs_update;
     char                *temp_disk;
+    bool                supplemental    : 1;
+    bool                needs_update    : 1;
 } *TargetInfo = NULL;
 
 static struct label_info {
@@ -271,13 +238,13 @@ static struct upgrade_info {
 } *UpgradeInfo = NULL;
 
 static struct association_info {
-    char    *ext;
-    char    *keyname;
-    char    *program;
-    char    *description;
-    int     icon_index;
-    int     no_open;
-    char    *condition;
+    char                *ext;
+    char                *keyname;
+    char                *description;
+    char                *program;
+    char                *condition;
+    char                *iconfile;
+    int                 iconindex;
 } *AssociationInfo = NULL;
 
 static file_cond_info   *FileCondInfo = NULL;
@@ -360,10 +327,6 @@ static char             *RawReadBuf;
 static char             *RawBufPos;
 static int              MaxWidthChars;
 static int              CharWidth;
-
-#ifdef PATCH
-static int              patchDirIndex = 0;      // used in secondary search during patch
-#endif
 
 static vhandle GetTokenHandle( const char *p );
 static void ZeroAutoSetValues( void );
@@ -627,7 +590,7 @@ static bool DoEvalCondition( const char *str, bool is_minimal )
 }
 
 bool EvalCondition( const char *str )
-/**********************************/
+/***********************************/
 {
     if( str == NULL || *str == '\0' )
         return( true );
@@ -671,109 +634,6 @@ static void PropagateValue( tree_node *tree, bool value )
     }
 }
 
-#ifdef PATCH
-static void GetDestDir( int i, VBUF *dstdir )
-/*******************************************/
-{
-    VBUF                temp;
-    VBUF                drive;
-    int                 intvalue = 0;
-
-    VbufInit( &temp );
-    VbufInit( &drive );
-
-    ReplaceVars( dstdir, GetVariableStrVal( "DstDir" ) );
-    VbufAddDirSep( dstdir );
-    intvalue = atoi( PatchInfo[i].destdir );
-    if( intvalue != 0 ) {
-        VbufConcStr( dstdir, strchr( DirInfo[intvalue - 1].desc, '=' ) + 1 );
-    } else {
-        // if destination dir specifies the drive, just use it
-        ReplaceVars( &temp, PatchInfo[i].destdir );
-        VbufSplitpath( &temp, &drive, NULL, NULL, NULL );
-        if( VbufLen( &drive ) > 0 ) {   // drive specified
-            VbufRewind( dstdir );
-        }
-        VbufConcVbuf( dstdir, &temp );
-    }
-    VbufAddDirSep( dstdir );
-
-    VbufFree( &drive );
-    VbufFree( &temp );
-}
-
-// calback for DoPatch in bld/bdiff project
-bool SecondaryPatchSearch( const char *filename, char *buff )
-/***********************************************************/
-{
-// search for patch output files (originals to be patched) in following order
-// 1.)  check .INF specified directory in PatchInfo structure (if it exists)
-// 2.)  check DstDir "variable"
-// 2b)  if not found in %DstDir%\destdir just try %DstDir%
-// 3.)  check system path
-
-// this function performs the first two checks
-// findold() in OLDFILE.C (bdiff project) does system path search
-// if first two searches fail and this function returns nonzero.
-
-    VBUF                path;
-    VBUF                ext;
-    bool                ok;
-
-    VbufInit( &path );
-
-    GetDestDir( patchDirIndex, &path );
-    VbufConcStr( &path, filename );
-    ok = ( access_vbuf( &path, F_OK ) == 0 );
-    if( !ok ) {
-        ReplaceVars( &path, GetVariableStrVal( "DstDir" ) );
-        VbufAddDirSep( &path );
-        VbufConcStr( &path, filename );
-        ok = ( access_vbuf( &path, F_OK ) == 0 );
-    }
-    if( ok ) {
-        strcpy( buff, VbufString( &path ) );
-    } else {
-        buff[0] = '\0';
-        VbufInit( &ext );
-        VbufSetStr( &path, filename );
-        VbufSplitpath( &path, NULL, NULL, NULL, &ext );
-        if( VbufCompStr( &ext, ".dll", true ) == 0 ) {
-            _searchenv( filename, "PATH", buff );
-        }
-        VbufFree( &ext );
-        ok = ( buff[0] != '\0' );
-    }
-
-    VbufFree( &path );
-    return( ok );
-}
-
-// calback for DoPatch in bld/bdiff project
-void PatchingFileStatusShow( const char *patchname, const char *path )
-/********************************************************************/
-{
-    VBUF    buff;
-
-    VbufInit( &buff );
-
-    VbufConcStr( &buff, patchname );
-    VbufConcStr( &buff, " to file " );
-    VbufConcStr( &buff, path );
-    StatusLinesVbuf( STAT_PATCHFILE, &buff );
-    StatusShow( true );
-
-    VbufFree( &buff );
-}
-
-// calback for DoPatch in bld/bdiff project
-bool PatchStatusCancelled( void )
-/*******************************/
-{
-    return( StatusCancelled() );
-}
-#endif
-
 static char *NextToken( char *buf, char delim )
 /*********************************************/
 // Locate the next 'token', delimited by the given character. Return a
@@ -800,8 +660,8 @@ static char *NextToken( char *buf, char delim )
 }
 
 
-static char *StripEndBlanks( char *p )
-/************************************/
+static char *StripBlanks( char *p )
+/*********************************/
 {
     char        *q;
 
@@ -815,6 +675,22 @@ static char *StripEndBlanks( char *p )
     while( q >= p && (*q == ' ' || *q == '\t' || *q == '\n') ) {
         *q = '\0';
         --q;
+    }
+    return( p );
+}
+
+
+static char *StripQuotes( char *p )
+/*********************************/
+{
+    size_t      len;
+
+    if( p != NULL ) {
+        len = strlen( p );
+        if( len > 1 && p[0] == '"' && p[len - 1] == '"' ) {
+            p[len - 1] = '\0';
+            p++;
+        }
     }
     return( p );
 }
@@ -1675,11 +1551,9 @@ static bool ProcLine( char *line, pass_type pass )
 {
     char                *next;
     int                 num;
-    int                 tmp;
-    char                *p;
 
     // Remove leading and trailing white-space.
-    line = StripEndBlanks( line );
+    line = StripBlanks( line );
 
     // Check for comment
     if( *line == '#' ) {
@@ -1735,11 +1609,6 @@ static bool ProcLine( char *line, pass_type pass )
             State = RS_MISCMESSAGE;
         } else if( stricmp( line, "[LicenseMessage]" ) == 0 ) {
             State = RS_LICENSEMESSAGE;
-#ifdef PATCH
-        } else if( stricmp( line, "[Patch]" ) == 0 ) {
-            State = RS_PATCH;
-            LineCountPointer = &SetupInfo.patch_files.alloc;
-#endif
         } else if( stricmp( line, "[Restrictions]" ) == 0 ) {
             State = RS_RESTRICTIONS;
         } else if( stricmp( line, "[DeleteFiles]" ) == 0 ) {
@@ -1881,7 +1750,6 @@ static bool ProcLine( char *line, pass_type pass )
             }
         }
         break;
-
     case RS_DIRS:
         num = SetupInfo.dirs.num;
         if( !BumpArray( &SetupInfo.dirs ) )
@@ -1895,134 +1763,87 @@ static bool ProcLine( char *line, pass_type pass )
             DirInfo[num].parent--;
         }
         break;
-
     case RS_FILES:
-      {
-        VBUF    fext;
+        {
+            int         num_files;
+            a_file_info *file;
+            char        *p;
+            VBUF        fext;
 
-        num = SetupInfo.files.num;
-        if( !BumpArray( &SetupInfo.files ) )
-            return( false );
-        next = NextToken( line, ',' );
-        FileInfo[num].filename = GUIStrDup( line, NULL );
-        line = next; next = NextToken( line, ',' );
-        /*
-            Multiple files in archive. First number is number of files,
-            followed by a list of file sizes in 512 byte blocks.
-        */
-        #define get36( x ) strtol( x, NULL, 36 )
-        tmp = get36( line );
-        if( tmp == 0 ) {
-            FileInfo[num].files = NULL;
-        } else {
-            FileInfo[num].files = GUIMemAlloc( tmp * sizeof( a_file_info ) );
-            if( FileInfo[num].files == NULL ) {
+            num = SetupInfo.files.num;
+            if( !BumpArray( &SetupInfo.files ) )
                 return( false );
-            }
-        }
-        FileInfo[num].supplemental = false;
-        FileInfo[num].core_component = false;
-        FileInfo[num].num_files = tmp;
-        VbufInit( &fext );
-        while( --tmp >= 0 ) {
-            a_file_info *file = &FileInfo[num].files[tmp];
-
+            next = NextToken( line, ',' );
+            FileInfo[num].filename = GUIStrDup( line, NULL );
             line = next; next = NextToken( line, ',' );
-            p = NextToken( line, '!' );
-            VbufInit( &file->name );
-            VbufConcStr( &file->name, line );
-            VbufSplitpath( &file->name, NULL, NULL, NULL, &fext );
-            file->is_nlm = VbufCompStr( &fext, ".nlm", true ) == 0;
-            file->is_dll = VbufCompStr( &fext, ".dll", true ) == 0;
-            line = p; p = NextToken( line, '!' );
-            file->size = get36( line ) * 512UL;
-            if( p != NULL && *p != '\0' && *p != '!' ) {
-                file->date = get36( p );
+            /*
+                Multiple files in archive. First number is number of files,
+                followed by a list of file sizes in 512 byte blocks.
+            */
+            num_files = GET36( line );
+            if( num_files == 0 ) {
+                FileInfo[num].files = NULL;
             } else {
-                file->date = SetupInfo.stamp;
-            }
-            line = p; p = NextToken( line, '!' );
-            if( p != NULL && *p != '\0' && *p != '!' ) {
-                file->dst_var = AddVariable( p );
-            } else {
-                file->dst_var = NO_VAR;
-            }
-            line = p; p = NextToken( line, '!' );
-            file->executable = false;
-            if( p != NULL ) {
-                if( *p == 'e' ) {
-                    file->executable = true;
+                FileInfo[num].files = GUIMemAlloc( num_files * sizeof( a_file_info ) );
+                if( FileInfo[num].files == NULL ) {
+                    return( false );
                 }
             }
-            line = p; p = NextToken( line, '!' );
-            if( p != NULL ) {
-                if( *p == 's' ) {
-                    FileInfo[num].supplemental = true;
-                } else if( *p == 'k' ) {
-                    FileInfo[num].core_component = true;
+            FileInfo[num].supplemental = false;
+            FileInfo[num].core_component = false;
+            FileInfo[num].num_files = num_files;
+            VbufInit( &fext );
+            file = FileInfo[num].files;
+            for( ; num_files-- > 0; ) {
+                line = next; next = NextToken( line, ',' );
+                p = NextToken( line, '!' );
+                VbufInit( &file->name );
+                VbufConcStr( &file->name, line );
+                VbufSplitpath( &file->name, NULL, NULL, NULL, &fext );
+                file->is_nlm = VbufCompStr( &fext, ".nlm", true ) == 0;
+                file->is_dll = VbufCompStr( &fext, ".dll", true ) == 0;
+                line = p; p = NextToken( line, '!' );
+                file->size = GET36( line ) * 512UL;
+                if( p != NULL && *p != '\0' && *p != '!' ) {
+                    file->date = GET36( p );
+                } else {
+                    file->date = SetupInfo.stamp;
                 }
+                line = p; p = NextToken( line, '!' );
+                if( p != NULL && *p != '\0' && *p != '!' ) {
+                    file->dst_var = AddVariable( p );
+                } else {
+                    file->dst_var = NO_VAR;
+                }
+                line = p; p = NextToken( line, '!' );
+                file->executable = false;
+                if( p != NULL ) {
+                    if( *p == 'e' ) {
+                        file->executable = true;
+                    }
+                }
+                line = p; p = NextToken( line, '!' );
+                if( p != NULL ) {
+                    if( *p == 's' ) {
+                        FileInfo[num].supplemental = true;
+                    } else if( *p == 'k' ) {
+                        FileInfo[num].core_component = true;
+                    }
+                }
+                file++;
             }
-        }
-        VbufFree( &fext );
-        line = next; next = NextToken( line, ',' );
-        FileInfo[num].dir_index = get36( line ) - 1;
-        line = next; next = NextToken( line, ',' );
-        FileInfo[num].old_dir_index = get36( line );
-        if( FileInfo[num].old_dir_index != -1 ) {
-            FileInfo[num].old_dir_index--;
-        }
-        line = next; next = NextToken( line, ',' );
-        FileInfo[num].condition.i = NewFileCond( line );
-        break;
-      }
-
-#ifdef PATCH
-    case RS_PATCH:
-        num = SetupInfo.patch_files.num;
-        if( !BumpArray( &SetupInfo.patch_files ) )
-            return( false );
-        memset( &PatchInfo[num], 0, sizeof( *PatchInfo ) );
-        next = NextToken( line, ',' );
-        if( stricmp( line, "copy" ) == 0 ) {
-            PatchInfo[num].command = PATCH_COPY_FILE;
+            VbufFree( &fext );
             line = next; next = NextToken( line, ',' );
-            PatchInfo[num].srcfile = GUIStrDup( line, NULL );
+            FileInfo[num].dir_index = GET36( line ) - 1;
             line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destdir = GUIStrDup( line, NULL );
+            FileInfo[num].old_dir_index = GET36( line );
+            if( FileInfo[num].old_dir_index != -1 ) {
+                FileInfo[num].old_dir_index--;
+            }
             line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destfile = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].condition = GUIStrDup( line, NULL );
-        } else if( stricmp( line, "patch" ) == 0 ) {
-            PatchInfo[num].command = PATCH_FILE;
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].srcfile = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destdir = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destfile = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].exetype = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].condition = GUIStrDup( line, NULL );
-        } else if( stricmp( line, "delete" ) == 0 ) {
-            PatchInfo[num].command = PATCH_DELETE_FILE;
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destfile = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destdir = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].condition = GUIStrDup( line, NULL );
-        } else if( stricmp( line, "mkdir" ) == 0 ) {
-            PatchInfo[num].command = PATCH_MAKE_DIR;
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].destdir = GUIStrDup( line, NULL );
-            line = next; next = NextToken( line, ',' );
-            PatchInfo[num].condition = GUIStrDup( line, NULL );
+            FileInfo[num].condition.i = NewFileCond( line );
         }
         break;
-#endif
-
     case RS_AUTOSET:
         next = NextToken( line, '=' );
         if( VariablesFile == NULL ) {
@@ -2031,12 +1852,10 @@ static bool ProcLine( char *line, pass_type pass )
             AddVariable( line );
         }
         break;
-
     case RS_RESTRICTIONS:
         next = NextToken( line, '=' );
         VarSetAutoSetRestriction( AddVariable( line ), next );
         break;
-
     case RS_SPAWN:
         num = SetupInfo.spawn.num;
         if( !BumpArray( &SetupInfo.spawn ) )
@@ -2053,7 +1872,6 @@ static bool ProcLine( char *line, pass_type pass )
         SpawnInfo[num].command = GUIStrDup( line, NULL );
         SpawnInfo[num].condition = CompileCondition( next );
         break;
-
     case RS_DELETEFILES:
         num = SetupInfo.delete.num;
         if( !BumpArray( &SetupInfo.delete ) )
@@ -2069,7 +1887,6 @@ static bool ProcLine( char *line, pass_type pass )
         line = next; next = NextToken( line, ',' );
         DeleteInfo[num].name = GUIStrDup( line, NULL );
         break;
-
     case RS_PMINFO:
         num = SetupInfo.pm_files.num;
         if( !BumpArray( &SetupInfo.pm_files ) )
@@ -2108,7 +1925,6 @@ static bool ProcLine( char *line, pass_type pass )
         }
         PMInfo[num].condition = CompileCondition( next );
         break;
-
     case RS_PROFILE:
         num = SetupInfo.profile.num;
         if( !BumpArray( &SetupInfo.profile ) )
@@ -2125,19 +1941,15 @@ static bool ProcLine( char *line, pass_type pass )
         ProfileInfo[num].hive_name = GUIStrDup( line, NULL );
         ProfileInfo[num].condition = CompileCondition( next );
         break;
-
     case RS_AUTOEXEC:
         GrabConfigInfo( line, &SetupInfo.autoexec );
         break;
-
     case RS_CONFIG:
         GrabConfigInfo( line, &SetupInfo.config );
         break;
-
     case RS_ENVIRONMENT:
         GrabConfigInfo( line, &SetupInfo.environment );
         break;
-
     case RS_TARGET:
         num = SetupInfo.target.num;
         if( !BumpArray( &SetupInfo.target ) )
@@ -2154,7 +1966,6 @@ static bool ProcLine( char *line, pass_type pass )
         }
         *TargetInfo[num].temp_disk = 0;
         break;
-
     case RS_LABEL:
         num = SetupInfo.label.num;
         if( !BumpArray( &SetupInfo.label ) )
@@ -2163,21 +1974,18 @@ static bool ProcLine( char *line, pass_type pass )
         LabelInfo[num].dir = GUIStrDup( line, NULL );
         LabelInfo[num].label = GUIStrDup( next, NULL );
         break;
-
     case RS_UPGRADE:
         num = SetupInfo.upgrade.num;
         if( !BumpArray( &SetupInfo.upgrade ) )
             return( false );
         UpgradeInfo[num].name = GUIStrDup( line, NULL );
         break;
-
     case RS_FORCEDLLINSTALL:
         num = SetupInfo.force_DLL_install.num;
         if( !BumpArray( &SetupInfo.force_DLL_install ) )
             return( false );
         ForceDLLInstall[num].name = GUIStrDup( line, NULL );
         break;
-
     case RS_ASSOCIATIONS:
         num = SetupInfo.associations.num;
         if( !BumpArray( &SetupInfo.associations ) )
@@ -2187,19 +1995,20 @@ static bool ProcLine( char *line, pass_type pass )
         line = next; next = NextToken( line, ',' );
         AssociationInfo[num].keyname = GUIStrDup( line, NULL );
         line = next; next = NextToken( line, ',' );
-        AssociationInfo[num].program = GUIStrDup( line, NULL );
-        line = next; next = NextToken( line, ',' );
         AssociationInfo[num].description = GUIStrDup( line, NULL );
         line = next; next = NextToken( line, ',' );
-        AssociationInfo[num].icon_index = strtol( line, NULL, 10 );
+        AssociationInfo[num].program = GUIStrDup( line, NULL );
         line = next; next = NextToken( line, ',' );
-        AssociationInfo[num].no_open = strtol( line, NULL, 10 );
+        AssociationInfo[num].iconfile = GUIStrDup( line, NULL );
+        line = next; next = NextToken( line, ',' );
+        AssociationInfo[num].iconindex = strtol( line, NULL, 10 );
         AssociationInfo[num].condition = CompileCondition( next );
         break;
-
-        /* for now Setup Error Messages, Status line Messages and Misc Messages
-            are treated as global symbolic variables just like
-            regular Error Messages */
+    /*
+     * For now Setup Error Messages, Status line Messages and Misc Messages
+     * are treated as global symbolic variables just like
+     * regular Error Messages
+     */
     case RS_SETUPERRORMESSAGE:
     case RS_STATUSLINEMESSAGE:
     case RS_MISCMESSAGE:
@@ -2208,18 +2017,14 @@ static bool ProcLine( char *line, pass_type pass )
     case RS_LICENSEMESSAGE:
 #endif
         {
-            char    *remnewline;
+            char    *p;
 
             next = NextToken( line, '=' );
-            next = StripEndBlanks( next );
-            next++;
-            *(strchr( next, '\0' ) - 1) = '\0';
-            for( ;; ) {
-                remnewline = strstr( next, "\\n" );
-                if( remnewline == NULL )
-                    break;
-                *remnewline = '\n';
-                memmove( remnewline + 1, remnewline + 2, strlen( remnewline + 2 ) + 1 );
+            next = StripBlanks( next );
+            next = StripQuotes( next );
+            for( ; (p = strstr( next, "\\n" )) != NULL; ) {
+                *p = '\n';
+                memmove( p + 1, p + 2, strlen( p + 2 ) + 1 );
             }
             SetVariableByName( line, next );
             break;
@@ -2227,7 +2032,6 @@ static bool ProcLine( char *line, pass_type pass )
     default:
         break;
     }
-
     return( true );
 }
 
@@ -2246,53 +2050,52 @@ static bool GetFileInfo( int dir_index, int i, bool in_old_dir, bool *pzeroed )
 
     if( dir_index == -1 )
         return( false );
+    found = false;
     VbufInit( &buff );
     SimDirNoEndSlash( dir_index, &buff );
-    if( access_vbuf( &buff, F_OK ) != 0 ) {
-        VbufFree( &buff );
-        return( false );
-    }
-
-    VbufAddDirSep( &buff );
-    dir_end = VbufLen( &buff );
-    found = false;
-    supp = TargetInfo[DirInfo[FileInfo[i].dir_index].target].supplemental;
-    if( supp ) {
-        // don't turn off supplemental bit if file is already marked
-        FileInfo[i].supplemental = supp;
-    }
-    for( j = 0; j < FileInfo[i].num_files; ++j ) {
-        file = &FileInfo[i].files[j];
-        file->disk_size = 0;
-        if( VbufLen( &file->name ) == 0 )
-            continue;
-        VbufSetLen( &buff, dir_end );
-        VbufConcVbuf( &buff, &file->name );
-        if( access_vbuf( &buff, F_OK ) == 0 ) {
-            stat_vbuf( &buff, &buf );
-            found = true;
-            file->disk_size = buf.st_size;
-            file->disk_date = (unsigned long)buf.st_mtime;
-            if( in_old_dir ) {
-                file->in_old_dir = true;
-            } else {
-                file->in_new_dir = true;
-            }
-            file->read_only = !(buf.st_mode & S_IWRITE);
-            if( supp )
+    if( access_vbuf( &buff, F_OK ) == 0 ) {
+        VbufAddDirSep( &buff );
+        dir_end = VbufLen( &buff );
+        supp = TargetInfo[DirInfo[FileInfo[i].dir_index].target].supplemental;
+        if( supp ) {
+            // don't turn off supplemental bit if file is already marked
+            FileInfo[i].supplemental = supp;
+        }
+        file = FileInfo[i].files;
+        for( j = 0; j < FileInfo[i].num_files; ++j, file++ ) {
+            file->disk_size = 0;
+            file->disk_date = 0;
+            file->read_only = false;
+            if( VbufLen( &file->name ) == 0 )
                 continue;
-            if( !*pzeroed ) {
-                ZeroAutoSetValues();
-                for( k = 0; k < SetupInfo.fileconds.num; ++k ) {
-                    FileCondInfo[k].one_uptodate = false;
+            VbufSetLen( &buff, dir_end );
+            VbufConcVbuf( &buff, &file->name );
+            if( access_vbuf( &buff, F_OK ) == 0 ) {
+                stat_vbuf( &buff, &buf );
+                found = true;
+                file->disk_size = buf.st_size;
+                file->disk_date = (unsigned long)buf.st_mtime;
+                if( in_old_dir ) {
+                    file->in_old_dir = true;
+                } else {
+                    file->in_new_dir = true;
                 }
-                *pzeroed = true;
-            }
-            PropagateValue( FileInfo[i].condition.p->cond, true );
-            if( file->in_new_dir &&
-                RoundUp( file->disk_size, 512 ) == file->size &&
-                file->date == file->disk_date ) {
-                FileInfo[i].condition.p->one_uptodate = true;
+                file->read_only = !(buf.st_mode & S_IWRITE);
+                if( supp )
+                    continue;
+                if( !*pzeroed ) {
+                    ZeroAutoSetValues();
+                    for( k = 0; k < SetupInfo.fileconds.num; ++k ) {
+                        FileCondInfo[k].one_uptodate = false;
+                    }
+                    *pzeroed = true;
+                }
+                PropagateValue( FileInfo[i].condition.p->cond, true );
+                if( file->in_new_dir &&
+                    RoundUp( file->disk_size, 512 ) == file->size &&
+                    file->date == file->disk_date ) {
+                    FileInfo[i].condition.p->one_uptodate = true;
+                }
             }
         }
     }
@@ -2575,9 +2378,6 @@ long SimInit( const VBUF *inf_name )
     InitArray( (void **)&TargetInfo, sizeof( struct target_info ), &SetupInfo.target );
     InitArray( (void **)&LabelInfo, sizeof( struct label_info ), &SetupInfo.label );
     InitArray( (void **)&UpgradeInfo, sizeof( struct upgrade_info ), &SetupInfo.upgrade );
-#ifdef PATCH
-    InitArray( (void **)&PatchInfo, sizeof( struct patch_info ), &SetupInfo.patch_files );
-#endif
     InitArray( (void **)&SpawnInfo, sizeof( struct spawn_info ), &SetupInfo.spawn );
     InitArray( (void **)&DeleteInfo, sizeof( struct spawn_info ), &SetupInfo.delete );
     InitArray( (void **)&FileCondInfo, sizeof( struct file_cond_info ), &SetupInfo.fileconds );
@@ -3197,16 +2997,16 @@ void SimGetAssociationDescription( int parm, VBUF *buff )
     VbufSetStr( buff, AssociationInfo[parm].description );
 }
 
+void SimGetAssociationIconFileName( int parm, VBUF *buff )
+/********************************************************/
+{
+    VbufSetStr( buff, AssociationInfo[parm].iconfile );
+}
+
 int SimGetAssociationIconIndex( int parm )
 /****************************************/
 {
-    return( AssociationInfo[parm].icon_index );
-}
-
-int SimGetAssociationNoOpen( int parm )
-/*************************************/
-{
-    return( AssociationInfo[parm].no_open );
+    return( AssociationInfo[parm].iconindex );
 }
 
 bool SimCheckAssociationCondition( int parm )
@@ -3552,548 +3352,6 @@ bool SimCalcTargetSpaceNeeded( void )
 }
 
 
-#ifdef PATCH
-
-static void AddFileName( int i, VBUF *buffer, bool rename )
-/*********************************************************/
-{
-    VbufAddDirSep( buffer );
-    if( !rename ) {
-        if( PatchInfo[i].destfile != NULL ) {
-            VbufConcStr( buffer, PatchInfo[i].destfile );
-        } else {
-            if( PatchInfo[i].srcfile != NULL ) {
-                VbufConcStr( buffer, PatchInfo[i].srcfile );
-            }
-        }
-    }
-}
-
-
-static void GetSourcePath( int i, VBUF *buff )
-/********************************************/
-{
-    ReplaceVars( buff, GetVariableStrVal( "Srcdir" ) );
-    VbufConcStr( buff, PatchInfo[i].srcfile );
-}
-
-
-static bool CopyErrorDialog( int ret, int i, const VBUF *file )
-/*************************************************************/
-{
-    /* unused parameters */ (void)i;
-
-    if( ret != CFE_NOERROR ) {
-        if( ret != CFE_ABORT ) {
-            return( MsgBoxVbuf( NULL, "IDS_COPYFILEERROR", GUI_YES_NO, file ) == GUI_RET_YES );
-        } else {
-            return( false );
-        }
-    }
-    return( true );
-}
-
-
-static bool PatchErrorDialog( PATCH_RET_CODE ret, int i )
-/*******************************************************/
-{
-    if( ret != PATCH_RET_OKAY && ret != PATCH_CANT_FIND_PATCH ) {
-        if( ret != PATCH_RET_CANCEL ) {
-            // error, attempt to continue patch process
-            return( MsgBox ( NULL, "IDS_PATCHFILEERROR", GUI_YES_NO, PatchInfo[i].srcfile ) == GUI_RET_YES );
-        } else {
-            return( false );
-        }
-    }
-    return( true );
-}
-
-
-#if 0
-static bool FindStr( FILE *fp, char *fullpath, char *pattern )
-/************************************************************/
-{
-    char            *buff;
-    size_t          len;
-    size_t          readsize;
-    char            *p;
-    size_t          i;
-    bool            found;
-    size_t          patternlen;
-
-    patternlen = strlen( pattern );
-    found = false;
-
-    buff = NULL;
-    for( readsize = 8 * 1024; readsize > 0; readsize = readsize / 2 ) {
-        buff = malloc( readsize + patternlen );
-        if( buff != NULL ) {
-            break;
-        }
-    }
-    if( readsize == 0 ) {
-        free( buff );
-        return( false );
-    }
-    memset( buff, 0, patternlen );
-    while( !found && !feof( fp ) ) {
-        len = fread( &buff[patternlen], 1, readsize, fp );
-        for( p = buff, i = 0; i < len; ++i, ++p ) {
-            if( *p == pattern[0] && memcmp( p, pattern, patternlen ) == 0 ) {
-                found = true;
-                break;
-            }
-        }
-        if( len > patternlen ) {
-            memcpy( buff,  &buff[len], patternlen );
-        }
-    }
-    if( found ) {
-        fseek( fp,  -(long)(len + patternlen - i), SEEK_CUR );
-        free( buff );
-        return( true );
-    }
-    free( buff );
-    return( false );
-}
-
-bool ReadBlock( char *fullpath, char *pattern, void *block, long blocklen )
-/*************************************************************************/
-{
-    FILE            *fp;
-    int             len;
-    struct stat     statbuf;
-
-    if( stat( fullpath, &statbuf ) != 0 ) {
-        // Cannot open file
-        return( false );
-    }
-    fp = fopen( fullpath, "rb" );
-    if( fp == NULL ) {
-        return( false );
-    }
-    if( FindStr( fp, fullpath, pattern ) ) {
-        len = fread( block, 1, blocklen, fp );
-        if( len == blocklen ) {
-            if( fclose( fp ) != 0 ) {
-                return( false );
-            }
-            return( true );
-        }
-    }
-    fclose( fp );
-    return( false );
-}
-
-
-bool WriteBlock( char *fullpath, char *pattern, void *block, long blocklen )
-/**************************************************************************/
-{
-    bool            foundstr;
-    FILE            *fp;
-    int             len;
-    struct stat     statbuf;
-    struct utimbuf  utimbuf;
-
-    if( stat( fullpath, &statbuf ) != 0 ) {
-        // Cannot open file
-        return( false );
-    }
-    utimbuf.actime = statbuf.st_atime;
-    utimbuf.modtime = statbuf.st_mtime;
-    fp = fopen( fullpath, "rb+" );
-    if( fp == NULL ) {
-        return( false );
-    }
-
-    foundstr = false;
-
-    //there may be more than one block
-    while( FindStr( fp, fullpath, pattern ) ) {
-        len = fwrite( block, 1, blocklen, fp );
-        fflush( fp );
-        if( len != blocklen ) {
-            fclose( fp );
-            return( false );
-        }
-        foundstr = true;
-    }
-    fclose( fp );
-    utime( fullpath, &utimbuf );
-    return( foundstr );
-}
-#endif
-
-typedef struct {
-    FILE    *log_file;
-    bool    do_log;
-} log_state;
-
-
-static FILE *LogFileOpen( void )
-/******************************/
-{
-    FILE        *logfp;
-    VBUF        patchlog;
-
-    VbufInit( &patchlog );
-
-    logfp = NULL;
-    VbufConcStr( &patchlog, GetVariableStrVal( "PatchLog" ) );
-    if( VbufLen( &patchlog ) > 0 ) {
-        if( access_vbuf( &patchlog, F_OK | W_OK | R_OK ) == 0
-          && MsgBoxVbuf( NULL, "IDS_LOGFILE_EXISTS", GUI_YES_NO, &patchlog ) == GUI_RET_NO ) {
-            // cancel
-        } else if( access_vbuf( &patchlog, F_OK ) == 0 ) {
-            MsgBoxVbuf( NULL, "IDS_CANT_OPEN_LOGFILE", GUI_OK, &patchlog );
-        } else {
-            remove_vbuf( &patchlog );
-            logfp = fopen_vbuf( &patchlog, "wt+" );
-            if( logfp == NULL ) {
-                MsgBoxVbuf( NULL, "IDS_CANT_OPEN_LOGFILE", GUI_OK, &patchlog );
-            }
-        }
-    }
-
-    VbufFree( &patchlog );
-    return( logfp );
-}
-
-
-static void LogFileClose( log_state *ls )
-/***************************************/
-{
-    if( ls->do_log && (fclose( ls->log_file ) != 0) ) {
-        MsgBox( NULL, "IDS_CANT_WRITE_LOGFILE", GUI_OK, GetVariableStrVal( "PatchLog" ) );
-    }
-}
-
-#define GetVariableMsgVal GetVariableStrVal
-
-static void LogWriteMsg( log_state *ls, const char *msg_id )
-/**********************************************************/
-{
-    if( ls->do_log ) {
-        fprintf( ls->log_file, "%s\n", GetVariableMsgVal( msg_id ) );
-    }
-}
-
-
-static void LogWriteMsgStr( log_state *ls, const char *msg_id, const VBUF *str )
-/******************************************************************************/
-{
-    if( ls->do_log ) {
-        fprintf( ls->log_file, GetVariableMsgVal( msg_id ), VbufString( str ) );
-    }
-}
-
-
-static int DoPatchFile( const VBUF *src, const VBUF *dst, unsigned_32 flag )
-/**************************************************************************/
-{
-    // TODO: Perform some useful function here
-
-    return( DoPatch( VbufString( src ), 0, 0, 0, VbufString( dst ) ) );
-}
-
-
-bool PatchFiles( void )
-/*********************/
-{
-    // this function performs the operations normally done in a batch file
-    // (like applyd.bat).  Operations are:  patch file, copy (create) file,
-    // and delete file.  Commands are set in [Patch] section of .INF file/
-    // "Patch" in [Application] section must be set to 1 for this function to
-    // be called.  Setting "Patch" to 1 overrides any regular setup (ie.
-    // only this function will be called )
-
-    int                 i;
-    VBUF                destfullpath;
-    VBUF                srcfullpath;
-    gui_message_return  guiret;
-    int                 count;      // count successful patches
-    const char          *appname;
-    char                exetype[3];
-    log_state           logstate;
-    log_state           *log;
-    bool                ok;
-
-
-    // note:  Up until this point, PatchInfo[x].destdir contains an
-    //        integer string representing the directory defined in
-    //        the [dirs] section on the .INF file.  This function will replace
-    //        the .destdir member with the actual (full) directory path.
-    //        The conversion is done here (instead of in initialization) so
-    //        that that user can change the DstDir before the patch process
-    //        begins.
-
-    count = 0;
-    log = &logstate;
-
-    if( GetVariableBoolVal( "DoPatchLog" ) ) {
-        log->log_file = LogFileOpen();
-        if( log->log_file == NULL ) {
-            MsgBox( NULL, "IDS_PATCHABORT", GUI_OK );
-            return( false );
-        }
-        log->do_log = true;
-        appname = GetVariableStrVal( "AppName" );
-        fprintf( log->log_file, "%s\n\n", appname );
-    } else {
-        log->log_file = NULL;
-        log->do_log = false;
-    }
-    VbufInit( &destfullpath );
-    VbufInit( &srcfullpath );
-    ok = true;
-    for( i = 0; ok && i < SetupInfo.patch_files.num; i++ ) {
-        if( !EvalCondition( PatchInfo[i].condition ) ) {
-            StatusAmount( i + 1, SetupInfo.patch_files.num );
-            continue;
-        }
-        VbufRewind( &srcfullpath );
-        VbufRewind( &destfullpath );
-        switch( PatchInfo[i].command ) {
-        case PATCH_FILE:
-            GetSourcePath( i, &srcfullpath );
-            if( access_vbuf( &srcfullpath, R_OK ) == 0 ) {
-                PATCH_RET_CODE  ret;
-                char            temp[_MAX_PATH];
-
-                patchDirIndex = i;       // used in secondary search during patch
-                if( SecondaryPatchSearch( PatchInfo[i].destfile, temp ) ) {
-                    VbufConcStr( &destfullpath, temp );
-                    if( PatchInfo[i].exetype[0] != '.'
-                      && ExeType( VbufString( &destfullpath ), exetype )
-                      && strcmp( exetype, PatchInfo[i].exetype ) != 0 ) {
-                        break;
-                    }
-                    StatusLinesVbuf( STAT_PATCHFILE, &destfullpath );
-                    StatusShow( true );
-                    LogWriteMsgStr( log, "IDS_UNPACKING", &destfullpath );
-                    ret = DoPatchFile( &srcfullpath, &destfullpath, 0 );
-                    if( ret == PATCH_RET_OKAY ) {
-                        ++count;
-                        LogWriteMsg( log, "IDS_SUCCESS" );
-                        break;
-                    } else {
-                        LogWriteMsg( log, "IDS_FAILED_UNPACKING" );
-                        if( !PatchErrorDialog( ret, i ) ) {
-                            LogWriteMsg( log, "IDS_PATCHABORT" );
-                            ok = false;
-                            break;
-                        }
-                    }
-                }
-            }
-            break;
-        case PATCH_COPY_FILE:
-            GetSourcePath( i, &srcfullpath );
-            GetDestDir( i, &destfullpath );
-            // get rid of trailing slash: OS/2 needs this for access(...) to work
-            VbufRemDirSep( &destfullpath );
-            if( access_vbuf( &destfullpath, F_OK ) == 0 ) {
-                AddFileName( i, &destfullpath, false );
-                StatusLinesVbuf( STAT_CREATEFILE, &destfullpath );
-                StatusShow( true );
-                if( access_vbuf( &srcfullpath, R_OK ) == 0 ) {
-                    LogWriteMsgStr( log, "IDS_UNPACKING", &destfullpath );
-                    if( DoCopyFile( &srcfullpath, &destfullpath, false ) == CFE_NOERROR ) {
-                        ++count;
-                        LogWriteMsg( log, "IDS_SUCCESS" );
-                        break;
-                    }
-                    LogWriteMsg( log, "IDS_FAILED_UNPACKING" );
-                    if( !CopyErrorDialog( CFE_ERROR, i, &srcfullpath ) ) {
-                        LogWriteMsg( log, "IDS_PATCHABORT" );
-                        ok = false;
-                    }
-                }
-            }
-            break;
-        case PATCH_DELETE_FILE:
-            GetDestDir( i, &destfullpath );
-            AddFileName( i, &destfullpath, false );
-            StatusLinesVbuf( STAT_DELETEFILE, &destfullpath );
-            StatusShow( true );
-            if( access_vbuf( &destfullpath, F_OK | W_OK ) == 0 ) {
-                LogWriteMsgStr( log, "IDS_DELETING", &destfullpath );
-                if( DoDeleteFile( &destfullpath ) ) {
-                    ++count;
-                    LogWriteMsg( log, "IDS_SUCCESS" );
-                } else {
-                    LogWriteMsg( log, "IDS_FAILED_DELETING" );
-                    guiret = MsgBoxVbuf( NULL, "IDS_DELETEFILEERROR", GUI_YES_NO, &destfullpath );
-                    if( guiret == GUI_RET_NO ) {
-                        LogWriteMsg( log, "IDS_PATCHABORT" );
-                        ok = false;
-                    }
-                }
-            }
-            break;
-        case PATCH_MAKE_DIR:
-            ReplaceVars( &destfullpath, PatchInfo[i].destdir );
-
-            StatusLinesVbuf( STAT_CREATEDIRECTORY, &destfullpath );
-            StatusShow( true );
-            if( access_vbuf( &destfullpath, F_OK ) != 0 ) {
-                LogWriteMsgStr( log, "IDS_CREATINGDIR", &destfullpath );
-#ifdef __UNIX__
-                if( mkdir_vbuf( &destfullpath, PMODE_RWX ) == 0 ) {
-#else
-                if( mkdir_vbuf( &destfullpath ) == 0 ) {
-#endif
-                    LogWriteMsg( log, "IDS_SUCCESS" );
-                } else {
-                    guiret = MsgBoxVbuf( NULL, "IDS_CREATEDIRERROR", GUI_YES_NO, &destfullpath );
-                    if( guiret == GUI_RET_NO ) {
-                        LogWriteMsg( log, "IDS_FAILED_CREATINGDIR" );
-                        ok = false;
-                    }
-                }
-            }
-            break;
-        default:
-            /* Something went wrong, but what can we do about it now? */
-            break;
-        }
-
-        StatusAmount( i + 1, SetupInfo.patch_files.num );
-        if( PatchStatusCancelled() ) {
-            LogWriteMsg( log, "IDS_PATCHABORT" );
-            ok = false;
-        }
-    }
-    VbufFree( &destfullpath );
-    VbufFree( &srcfullpath );
-    PatchStatusCancelled(); /* make sure display gets updated */
-
-    if( ok && count == 0 ) {
-        LogWriteMsg( log, "IDS_NO_FILES_PATCHED" );
-    }
-    LogFileClose( log );
-    if( ok && count == 0 ) {
-        // no files patched successfully
-        MsgBox( NULL, "IDS_NO_FILES_PATCHED", GUI_OK );
-        ok = false;
-    }
-    return( ok );
-}
-
-
-void MsgPut( int resourceid, va_list arglist )
-{
-    const char  *msgbuf;
-    char        *messageid;
-    char        *argbuf[3];
-    int         i;
-
-    for( i = 0; i < 3; i++ ) {
-        argbuf[i] = va_arg( arglist, char * );
-    }
-    switch( resourceid ) {
-  #if !defined( __UNIX__ )
-    case ERR_TWO_NAMES:
-        messageid = "IDS_TWONAMES";
-        break;
-    case ERR_WRONG_SIZE:
-        messageid = "IDS_BADLENGTH";
-        break;
-    case ERR_CANT_RENAME:
-        messageid = "IDS_CANTRENAME";
-        break;
-    case ERR_WRONG_CHECKSUM:
-        messageid = "IDS_WRONGCHECKSUM";
-        break;
-    case ERR_PATCH_ABORTED:
-        messageid = "IDS_PATCHABORT";
-        break;
-    case ERR_NOT_PATCHFILE:
-        messageid = "IDS_NOTPATCHFILE";
-        break;
-    case ERR_BAD_PATCHFILE:
-        messageid = "IDS_BADPATCHFILE";
-        break;
-    case ERR_CANT_FIND:
-        messageid = "IDS_CANTOPENSRC";
-        break;
-    case ERR_CANT_READ:
-        messageid = "IDS_CANTREADFILE";
-        break;
-    case ERR_CANT_WRITE:
-        messageid = "IDS_CANTWRITE";
-        break;
-    case ERR_CANT_OPEN:
-        messageid = "IDS_CANTFINDOUTPUT";
-        break;
-    case ERR_IO_ERROR:
-        messageid = "IDS_IOERROR";
-        break;
-    case ERR_MEMORY_OUT:
-        messageid = "IDS_NOMEMORY";
-        break;
-    case ERR_CANT_GET_ATTRIBUTES:
-        messageid = "IDS_NOATTRIBUTES";
-        break;
-  #endif
-    default:
-        messageid = "IDS_ERROR";
-    }
-    msgbuf = GetVariableStrVal( messageid );
-    MsgBox( NULL, messageid, GUI_OK, argbuf[0], argbuf[1], argbuf[2] );
-}
-
-
-void PatchError( int format, ... )
-{
-    va_list     args;
-
-    // don't give error message if the patch file cant be found
-    // just continue
-  #if !defined( __UNIX__ )
-    if( format == ERR_CANT_FIND )
-        return;
-  #endif
-    if( GetVariableBoolVal( "Debug" ) ) {
-        va_start( args, format );
-        MsgPut( format, args );
-        va_end( args );
-    }
-}
-
-
-void FilePatchError( int format, ... )
-{
-    va_list     args;
-
-  #if !defined( __UNIX__ )
-    if( format == ERR_CANT_FIND )
-        return;
-    if( format == ERR_CANT_OPEN )
-        return;
-  #endif
-    va_start( args, format );
-    MsgPut( format, args );
-    va_end( args );
-}
-
-void FileCheck( FILE *fd, const char *name )
-{
-    if( fd == NULL ) {
-        FilePatchError( ERR_CANT_OPEN, name );
-    }
-}
-
-void SeekCheck( int rc, const char *name )
-{
-    if( rc != 0 ) {
-        FilePatchError( ERR_IO_ERROR, name );
-    }
-}
-
-#endif  /* PATCH */
-
-
 /* ********** Free up all structures associated with this file ******* */
 
 
@@ -4116,6 +3374,8 @@ static void FreeTargetVal( void )
         GUIMemFree( TargetInfo[i].temp_disk );
     }
     GUIMemFree( TargetInfo );
+    TargetInfo = NULL;
+    SetupInfo.target.num = 0;
 }
 
 
@@ -4127,6 +3387,8 @@ static void FreeDirInfo( void )
         GUIMemFree( DirInfo[i].desc );
     }
     GUIMemFree( DirInfo );
+    DirInfo = NULL;
+    SetupInfo.dirs.num = 0;
 }
 
 
@@ -4145,6 +3407,8 @@ static void FreeFileInfo( void )
             GUIMemFree( FileInfo[i].files );
         }
         GUIMemFree( FileInfo );
+        FileInfo = NULL;
+        SetupInfo.files.num = 0;
     }
 }
 
@@ -4159,6 +3423,7 @@ static void FreeDLLsToCheck( void )
         }
         GUIMemFree( DLLsToCheck );
         DLLsToCheck = NULL;
+        SetupInfo.dlls_to_count.num = 0;
     }
 }
 
@@ -4173,6 +3438,7 @@ static void FreeFileCondInfo( void )
         }
         GUIMemFree( FileCondInfo );
         FileCondInfo = NULL;
+        SetupInfo.fileconds.num = 0;
     }
 }
 
@@ -4187,26 +3453,9 @@ static void FreeForceDLLInstall( void )
         }
         GUIMemFree( ForceDLLInstall );
         ForceDLLInstall = NULL;
+        SetupInfo.force_DLL_install.num = 0;
     }
 }
-
-#ifdef PATCH
-static void FreePatchInfo( void )
-/*******************************/
-{
-    int i;
-
-    for( i = 0; i < SetupInfo.patch_files.num; i++ ) {
-        GUIMemFree( PatchInfo[i].destdir );
-        GUIMemFree( PatchInfo[i].destfile );
-        GUIMemFree( PatchInfo[i].srcfile );
-        GUIMemFree( PatchInfo[i].condition );
-        GUIMemFree( PatchInfo[i].exetype );
-    }
-    GUIMemFree( PatchInfo );
-}
-#endif
-
 
 static void FreeSpawnInfo( void )
 /*******************************/
@@ -4218,6 +3467,8 @@ static void FreeSpawnInfo( void )
         GUIMemFree( SpawnInfo[i].condition );
     }
     GUIMemFree( SpawnInfo );
+    SpawnInfo = NULL;
+    SetupInfo.spawn.num = 0;
 }
 
 
@@ -4230,6 +3481,8 @@ static void FreeDeleteInfo( void )
         GUIMemFree( DeleteInfo[i].name );
     }
     GUIMemFree( DeleteInfo );
+    DeleteInfo = NULL;
+    SetupInfo.delete.num = 0;
 }
 
 
@@ -4246,6 +3499,8 @@ static void FreePMInfo( void )
         GUIMemFree( PMInfo[i].condition );
     }
     GUIMemFree( PMInfo );
+    PMInfo = NULL;
+    SetupInfo.pm_files.num = 0;
 }
 
 
@@ -4263,6 +3518,8 @@ static void FreeProfileInfo( void )
         GUIMemFree( ProfileInfo[i].condition );
     }
     GUIMemFree( ProfileInfo );
+    ProfileInfo = NULL;
+    SetupInfo.profile.num = 0;
 }
 
 
@@ -4277,8 +3534,32 @@ static void FreeOneConfigInfo( array_info *info, struct config_info *array )
         GUIMemFree( array[i].condition );
     }
     GUIMemFree( array );
+    info->num = 0;
 }
 
+static void FreeEnvironmentInfo( void )
+{
+    if( EnvironmentInfo != NULL ) {
+        FreeOneConfigInfo( &SetupInfo.environment, EnvironmentInfo );
+        EnvironmentInfo = NULL;
+    }
+}
+
+static void FreeAutoExecInfo( void )
+{
+    if( AutoExecInfo != NULL ) {
+        FreeOneConfigInfo( &SetupInfo.autoexec, AutoExecInfo );
+        AutoExecInfo = NULL;
+    }
+}
+
+static void FreeConfigInfo( void )
+{
+    if( ConfigInfo != NULL ) {
+        FreeOneConfigInfo( &SetupInfo.config, ConfigInfo );
+        ConfigInfo = NULL;
+    }
+}
 
 static void FreeUpgradeInfo( void )
 /*********************************/
@@ -4291,6 +3572,7 @@ static void FreeUpgradeInfo( void )
         }
         GUIMemFree( UpgradeInfo );
         UpgradeInfo = NULL;
+        SetupInfo.upgrade.num = 0;
     }
 }
 
@@ -4306,6 +3588,7 @@ static void FreeLabelInfo( void )
         }
         GUIMemFree( LabelInfo );
         LabelInfo = NULL;
+        SetupInfo.label.num = 0;
     }
 }
 
@@ -4321,6 +3604,7 @@ static void FreeAllPMGroups( void )
         }
         GUIMemFree( AllPMGroups );
         AllPMGroups = NULL;
+        SetupInfo.all_pm_groups.num = 0;
     }
 }
 
@@ -4333,12 +3617,14 @@ static void FreeAssociationInfo( void )
         for( i = 0; i < SetupInfo.associations.num; i++ ) {
             GUIMemFree( AssociationInfo[i].ext );
             GUIMemFree( AssociationInfo[i].keyname );
-            GUIMemFree( AssociationInfo[i].program );
             GUIMemFree( AssociationInfo[i].description );
+            GUIMemFree( AssociationInfo[i].program );
+            GUIMemFree( AssociationInfo[i].iconfile );
             GUIMemFree( AssociationInfo[i].condition );
         }
         GUIMemFree( AssociationInfo );
         AssociationInfo = NULL;
+        SetupInfo.associations.num = 0;
     }
 }
 
@@ -4349,14 +3635,11 @@ void FreeAllStructs( void )
     FreeDirInfo();
     FreeFileInfo();
     FreeFileCondInfo();
-#ifdef PATCH
-    FreePatchInfo();
-#endif
     FreePMInfo();
     FreeProfileInfo();
-    FreeOneConfigInfo( &SetupInfo.environment, EnvironmentInfo );
-    FreeOneConfigInfo( &SetupInfo.autoexec, AutoExecInfo );
-    FreeOneConfigInfo( &SetupInfo.config, ConfigInfo );
+    FreeEnvironmentInfo();
+    FreeAutoExecInfo();
+    FreeConfigInfo();
     FreeSetupInfoVal();
     FreeSpawnInfo();
     FreeDeleteInfo();
