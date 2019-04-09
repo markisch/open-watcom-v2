@@ -50,6 +50,7 @@
 #else
     #include <direct.h>
 #endif
+#include <errno.h>
 #include "wio.h"
 #include "watcom.h"
 #include "walloca.h"
@@ -62,7 +63,6 @@
 #include "utils.h"
 #include "setupio.h"
 #include "iopath.h"
-#include "errno.h"
 #include "guistat.h"
 
 #include "clibext.h"
@@ -1171,11 +1171,14 @@ bool CheckUpgrade( void )
         return( true );
     }
 #else
+    disk[0] = 'c';
+    disk[1] = ':';
+    disk[2] = '\\';
     for( disk[0] = 'c'; disk[0] <= 'z'; disk[0]++ ) {
         if( !IsFixedDisk( disk[0] ) )
             continue;
-        strcpy( disk + 1, ":\\" );
         StatusCancelled();
+        disk[3] = '\0';
         if( FindUpgradeFile( disk ) ) {
             return( true );
         }
@@ -2034,8 +2037,12 @@ static void RemoveExtraFiles( void )
 #if !defined( __UNIX__ )
     const char          *p;
     char                dst_path[_MAX_PATH];
+#endif
+    bool                uninstall;
 
-    if( VarGetBoolVal( UnInstall ) ) {
+    uninstall = VarGetBoolVal( UnInstall );
+    if( uninstall ) {
+#if !defined( __UNIX__ )
         // delete saved autoexec's and config's
         p = GetVariableStrVal( "DstDir" );
 #if defined( __NT__ )
@@ -2062,8 +2069,11 @@ static void RemoveExtraFiles( void )
         strcat( dst_path, "\\CONFIG.DOS" );
         remove( dst_path );
 #endif
-    }
 #endif
+        if( GetVariableBoolVal( "GenerateBatchFile" ) ) {
+            GenerateBatchFile( uninstall );
+        }
+    }
 }
 
 static void DetermineSrcState( const VBUF *src_dir )
