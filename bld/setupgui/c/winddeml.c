@@ -398,27 +398,54 @@ static bool UseDDE( bool uninstall )
 // Directory names cannot have forward slashes in them, and probably other
 // characters. This is a problem for "C/C++". Not all platforms are restricted
 // like this, so just munge the file name here.
-static void munge_fname( VBUF *name )
-/***********************************/
+static void munge_fname_add( VBUF *buff, const VBUF *name )
+/*********************************************************/
 {
     const char  *s;
     VBUF        tmp;
+    VBUF        tmp1;
     size_t      len;
+    const char  *replacement;
 
     VbufInit( &tmp );
-    for( s = VbufString( name ); *s != '\0'; s++ ) {
+    VbufInit( &tmp1 );
+
+    VbufConcVbuf( &tmp, name );
+    for( s = VbufString( &tmp ); *s != '\0'; ) {
         if( *s == '/' ) {
-//    MessageBox(0, VbufString( name ), 0, 0);
-            len = s - VbufString( name );
-            VbufSetStr( &tmp, s + 1 );
-            VbufSetLen( name, len );
-            VbufConcStr( &tmp, " - " );     // replace slash by underscore
-            VbufConcVbuf( name, &tmp );
-            s = VbufString( name ) + len + 2;
-//    MessageBox(0, VbufString( name ), 0, 0);
+            replacement = " - ";
+        } else {
+            s++;
+            continue;
         }
+//        MessageBox(0, VbufString( &tmp ), 0, 0);
+        len = s - VbufString( &tmp );
+        VbufSetStr( &tmp1, s + 1 );
+        VbufSetStrAt( &tmp, replacement, len );
+        len = VbufLen( &tmp );
+        VbufConcVbuf( &tmp, &tmp1 );
+        s = VbufString( &tmp ) + len;
+//        MessageBox(0, VbufString( &tmp ), 0, 0);
     }
+    VbufConcVbuf( buff, &tmp );
+
+    VbufFree( &tmp1 );
     VbufFree( &tmp );
+}
+
+static void append_curr_group_name( VBUF *buff, const VBUF *group )
+/*****************************************************************/
+{
+    VBUF    root_group;
+
+    VbufInit( &root_group );
+    SimGetPMApplGroupName( &root_group );
+    munge_fname_add( buff, &root_group );
+    if( group != NULL && VbufLen( group ) > 0 ) {
+        VbufConcChr( buff, '\\' );
+        munge_fname_add( buff, group );
+    }
+    VbufFree( &root_group );
 }
 
 static void get_group_name( VBUF *buff, const VBUF *group )
@@ -436,8 +463,7 @@ static void get_group_name( VBUF *buff, const VBUF *group )
         VbufConcStr( buff, "\\Start Menu\\Programs" );
     }
     VbufConcChr( buff, '\\' );
-    VbufConcVbuf( buff, group );
-    munge_fname( buff );
+    append_curr_group_name( buff, group );
 }
 
 static bool linkCreateGroup( const VBUF *group )
@@ -457,6 +483,8 @@ static bool linkCreateGroup( const VBUF *group )
     }
 }
 
+#define linkCreateApplGroup()   linkCreateGroup( NULL )
+
 static void delete_dir( const VBUF *dir )
 /***************************************/
 {
@@ -474,11 +502,10 @@ static void delete_dir( const VBUF *dir )
     dirp = opendir_vbuf( &file );
     if( dirp != NULL ) {
         for( ; (direntp = readdir( dirp )) != NULL; ) {
-            if( direntp->d_attr & 0x10 ) {        /* don't care about directories */
+            if( direntp->d_attr & _A_SUBDIR ) {   /* don't care about directories */
                 continue;
             }
-            VbufSetLen( &file, dir_len );
-            VbufConcStr( &file, direntp->d_name );
+            VbufSetStrAt( &file, direntp->d_name, dir_len );
             remove_vbuf( &file );
         }
         closedir( dirp );
@@ -512,9 +539,8 @@ static bool linkGroupAddItem( const VBUF *group, const VBUF *prog_name, const VB
     // Determine names of link files
     get_group_name( &link, group );
     VbufConcChr( &link, '\\' );
-    VbufConcVbuf( &link, prog_desc );
+    munge_fname_add( &link, prog_desc );
     VbufConcStr( &link, ".lnk" );
-    munge_fname( &link );
 
     MultiByteToWideChar( CP_ACP, 0, VbufString( &link ), -1, w_link, _MAX_PATH );
 
@@ -580,9 +606,7 @@ static bool UseIShellLink( bool uninstall )
     } else if( SimIsPMApplGroupDefined() ) {
         CoInitialize( NULL );
         // Create the PM Group box.
-        VbufInit( &group );
-        SimGetPMApplGroupName( &group );
-        ok = linkCreateGroup( &group );
+        ok = linkCreateApplGroup();
         if( ok ) {
             // Add the individual PM files to the Group box.
             num_icons = SimGetPMsNum();
@@ -593,6 +617,7 @@ static bool UseIShellLink( bool uninstall )
                     ++num_total_install;
                 }
             }
+            VbufInit( &group );
             VbufInit( &prog_name );
             VbufInit( &prog_desc );
             VbufInit( &iconfile );
@@ -605,11 +630,12 @@ static bool UseIShellLink( bool uninstall )
                 if( !SimCheckPMCondition( i ) ) {
                     continue;
                 }
-                SimGetPMDesc( i, &prog_desc );
                 if( SimPMIsGroup( i ) ) {
                     /* creating a new group */
-                    ok = linkCreateGroup( &prog_desc );
+                    SimGetPMDesc( i, &group );
+                    ok = linkCreateGroup( &group );
                 } else {
+                    SimGetPMDesc( i, &prog_desc );
                     /*
                      * Adding item to group
                      */
@@ -654,8 +680,8 @@ static bool UseIShellLink( bool uninstall )
             VbufFree( &iconfile );
             VbufFree( &prog_desc );
             VbufFree( &prog_name );
+            VbufFree( &group );
         }
-        VbufFree( &group );
         CoUninitialize();
     }
     return( ok );

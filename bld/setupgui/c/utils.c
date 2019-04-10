@@ -949,11 +949,12 @@ static void RemoveDstDir( int dir_index, VBUF *buff )
 /***************************************************/
 {
     int         child;
-    int         max_dirs = SimNumDirs();
+    int         max_dirs;
 
     SimDirNoEndSlash( dir_index, buff );
     if( access_vbuf( buff, F_OK ) != 0 )
         return;
+    max_dirs = SimNumDirs();
     for( child = 0; child < max_dirs; ++child ) {
         if( SimDirParent( child ) == dir_index ) {
             RemoveDstDir( child, buff );
@@ -1133,7 +1134,7 @@ static bool FindUpgradeFile( char *path )
 #else
                 if( info->d_attr & _A_SUBDIR ) {
 #endif
-                    if( info->d_name[0] != '.' ) {
+                    if( IS_VALID_DIR( info ) ) {
                         if( FindUpgradeFile( path ) ) {
                             ok = true;
                         }
@@ -1940,8 +1941,7 @@ static bool DoCopyFiles( void )
                         var_handle = SimSubFileVar( filenum, subfilenum );
                         VbufMakepath( &tmp_path, NULL, &dir, &file_desc, NULL );
 
-                        VbufSetLen( &src_path, src_path_pos2 );     // nuke name from end of src_path
-                        VbufConcVbuf( &src_path, &file_desc );
+                        VbufSetVbufAt( &src_path, &file_desc, src_path_pos2 );  // add name to end of src_path
                         StatusLinesVbuf( STAT_COPYINGFILE, &tmp_path );
                         checkForNewName( filenum, subfilenum, &tmp_path );
                         copy_error = DoCopyFile( &src_path, &tmp_path, false );
@@ -2034,42 +2034,33 @@ static void RemoveExtraFiles( void )
 /**********************************/
 // remove supplemental files
 {
-#if !defined( __UNIX__ )
-    const char          *p;
-    char                dst_path[_MAX_PATH];
-#endif
     bool                uninstall;
 
     uninstall = VarGetBoolVal( UnInstall );
     if( uninstall ) {
 #if !defined( __UNIX__ )
+        const char      *p;
+        char            dst_path[_MAX_PATH];
+
         // delete saved autoexec's and config's
         p = GetVariableStrVal( "DstDir" );
-#if defined( __NT__ )
+    #if defined( __NT__ )
         // Windows NT
         strcpy( dst_path, p );
         strcat( dst_path, "\\CHANGES.ENV" );
         remove( dst_path );
-        // Windows 95
+    #endif
+    #if defined( __NT__ ) || defined( __WINDOWS__ ) || defined( __DOS__ )
+        // Windows 95, Windows 3.x, DOS
         strcpy( dst_path, p );
-        strcat( dst_path, "\\AUTOEXEC.W95" );
+        strcat( dst_path, "\\AUTOEXEC." BATCH_EXT_SAVED );
         remove( dst_path );
+    #endif
         strcpy( dst_path, p );
-        strcat( dst_path, "\\CONFIG.W95" );
-        remove( dst_path );
-#elif defined( __OS2__ )
-        strcpy( dst_path, p );
-        strcat( dst_path, "\\CONFIG.OS2" );
-        remove( dst_path );
-#else
-        strcpy( dst_path, p );
-        strcat( dst_path, "\\AUTOEXEC.DOS" );
-        remove( dst_path );
-        strcpy( dst_path, p );
-        strcat( dst_path, "\\CONFIG.DOS" );
+        strcat( dst_path, "\\CONFIG." BATCH_EXT_SAVED );
         remove( dst_path );
 #endif
-#endif
+        // delete saved environment setup batch script file
         if( GetVariableBoolVal( "GenerateBatchFile" ) ) {
             GenerateBatchFile( uninstall );
         }
@@ -2141,15 +2132,14 @@ static bool NukePath( VBUF *path, int status )
         VbufAddDirSep( path );
         path_len = VbufLen( path );
         while( (info = readdir( dirp )) != NULL ) {
-            VbufSetLen( path, path_len );
-            VbufConcStr( path, info->d_name );
+            VbufSetStrAt( path, info->d_name, path_len );
 #if defined( __UNIX__ )
             stat_vbuf( path, &statbuf );
             if( S_ISDIR( statbuf.st_mode ) ) {
 #else
             if( info->d_attr & _A_SUBDIR ) {
 #endif
-                if( info->d_name[0] != '.' ) {
+                if( IS_VALID_DIR( info ) ) {
                     if( !NukePath( path, status ) ) {
                         ok = false;
                         break;
@@ -2279,16 +2269,15 @@ void AddInstallName( VBUF *str )
     // p = strchr( text, '@' ); no good for dbcs!!!
     p = VbufString( str );
     while( *p != '\0' ) {
-        if( *p == '@' ) {
-            len = p - VbufString( str );
-            VbufSetStr( &temp, p + 1 );
-            VbufSetLen( str, len );
-            VbufConcVbuf( str, &inst_name );
-            VbufConcVbuf( str, &temp );
-            p = VbufString( str ) + len;
+        if( *p != '@' ) {
+            p += GUICharLen( UCHAR_VALUE( *p ) );
             continue;
         }
-        p += GUICharLen( UCHAR_VALUE( *p ) );
+        len = p - VbufString( str );
+        VbufSetStr( &temp, p + 1 );
+        VbufSetVbufAt( str, &inst_name, len );
+        VbufConcVbuf( str, &temp );
+        p = VbufString( str ) + len;
     }
 
     VbufFree( &inst_name );
@@ -2305,15 +2294,14 @@ static void remove_ampersand( VBUF *str )
     VbufInit( &tmp );
     s = VbufString( str );
     while( *s != '\0' ) {
-        if( *s == '&' ) {
-            len = s - VbufString( str );
-            VbufSetStr( &tmp, s + 1 );
-            VbufSetLen( str, len );
-            VbufConcVbuf( str, &tmp );
-            s = VbufString( str ) + len;
+        if( *s != '&' ) {
+            s++;
             continue;
         }
-        s++;
+        len = s - VbufString( str );
+        VbufSetStr( &tmp, s + 1 );
+        VbufSetVbufAt( str, &tmp, len );
+        s = VbufString( str ) + len;
     }
     VbufFree( &tmp );
 }
