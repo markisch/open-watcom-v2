@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -30,44 +31,25 @@
 ****************************************************************************/
 
 
-#include <stddef.h>
-#include "wdebug.h"
-#include "stdwin.h"
-#include "trpsys.h"
+#ifndef _UIINTERN_H_INCLUDED
+#define _UIINTERN_H_INCLUDED
 
-BYTE                    DLLLoadSaveByte;
-WORD                    DLLLoadIP;
-WORD                    DLLLoadCS;
-BOOL                    DLLLoadExpectingInt1;
-BOOL                    TraceOn;
-HTASK                   DebuggerTask;
-HTASK                   DebugeeTask;
-HINSTANCE               DebugeeInstance;
-struct interrupt_struct IntResult;
-volatile debugger_state DebuggerState = ACTIVE;
-break_point             StopNewTask;
-DWORD                   SystemDebugState;
-unsigned_8              FPUType;
-volatile restart_opts   AppMessage;
-DWORD                   TerminateCSIP;
-HWND                    DebuggerWindow;
-bool                    FaultHandlerEntered;
-int                     SaveStdIn = NIL_HANDLE;
-int                     SaveStdOut = NIL_HANDLE;
-bool                    WDebug386 = false;
-HMODULE                 DebugeeModule;
-BOOL                    DebugDebugeeOnly;
-HTASK                   TaskAtFault;
-bool                    InSoftMode;
-WORD                    CSAlias;
-WORD                    SegmentToAccess;
-BOOL                    PendingTrap;
-event_hook_fn           *HookRtn;
-bool                    HardModeRequired;
-bool                    ForceHardMode;
-BOOL                    InputLocked;
-char                    OutBuff[MAX_STR];
-int                     OutPos;
-BOOL                    StopOnExtender;
-BOOL                    LoadingDebugee;
-BOOL                    Debugging32BitApp;
+#include <sys/types.h>
+#include "uidef.h"
+#include "uivirts.h"
+#include "uiintern.h"
+
+
+pid_t       UIProxy;                        /* proxy for all events */
+pid_t       UIPGroup;                       /* process group */
+bool        UIDisableShiftChanges = false;  /* Disable checking on non console devices */
+VirtDisplay UIVirt;                         /* Active virtual console functions */
+
+#ifdef __QNX__
+int         UIConsole = 0;                  /* console number */
+pid_t       UILocalProxy;                   /* proxy's incoming value (usually same as UIProxy */
+pid_t       UIRemProxy;                     /* remote proxy if nec.. */
+nid_t       UIConNid;                       /* Node of console mgr */
+#endif
+
+#endif

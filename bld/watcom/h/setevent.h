@@ -25,42 +25,27 @@
 *
 *  ========================================================================
 *
-* Description:  spawn a command with proper screen and keyboard restore
+* Description:  16-bit Windows Event Hook related prototypes
+*                SetEventHook is undocumented entry USER.321
 *
 ****************************************************************************/
 
 
-#include "vi.h"
-#include "stdui.h"
-#include "uiextrn.h"
-#include "getspcmd.h"
+/*
+ * The handler installed by SetEventHook uses non-standard calling convention.
+ * Arguments are passed in ax and cx, and setting carry flag before exit
+ * may cause the message to be discarded. Also, the routine has to set ds
+ * to the proper value (ie. no multiple instances - but it may not be possible
+ * to register multiple event hooks anyway). See Undocumented Windows.
+ *
+ * #pragma aux event_hook_fn __far __parm [__ax] [__cx] __modify __exact []
+ *
+ */
 
+#ifdef __WINDOWS__
 
-const char _NEAR * _NEAR InternalCommands[] = {
-    (const char _NEAR *)""
-};
+typedef void __far __loadds event_hook_fn( unsigned, unsigned );
 
-int InternalCommandCount = sizeof( InternalCommands ) / sizeof( char * );
+extern void __far __pascal SetEventHook( event_hook_fn * );
 
-const char _NEAR * _NEAR ExeExtensions[] = {
-    (const char _NEAR *)""
-};
-
-int ExeExtensionCount = sizeof( ExeExtensions ) / sizeof( char * );
-
-void ResetSpawnScreen( void )
-{
-    TermRefresh( NULL );
-}
-
-long MySpawn( const char *cmd )
-{
-    long rc;
-
-    FiniMouse();
-    uistop();
-    rc = system( cmd );
-    uistart();
-    InitMouse();
-    return( rc );
-}
+#endif

@@ -49,8 +49,10 @@
 #include <i86.h>
 #include "uidef.h"
 #include "uivirt.h"
+#include "uiintern.h"
 #include "uiextrn.h"
 #include "ctkeyb.h"
+#include "uicurshk.h"
 
 
 static MONITOR ui_data = {
@@ -323,8 +325,8 @@ static int cd_refresh( bool must )
     return( 0 );
 }
 
-static int cd_getcur( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
-/************************************************************************/
+static int UIHOOK cd_getcur( CURSORORD *row, CURSORORD *col, CURSOR_TYPE *type, CATTR *attr )
+/*******************************************************************************************/
 {
     *row = UIData->cursor_row;
     *col = UIData->cursor_col;
@@ -334,8 +336,8 @@ static int cd_getcur( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
 }
 
 
-static int cd_setcur( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
-/*******************************************************************/
+static int UIHOOK cd_setcur( CURSORORD row, CURSORORD col, CURSOR_TYPE typ, CATTR attr )
+/**************************************************************************************/
 {
     /* unused parameters */ (void)attr;
 

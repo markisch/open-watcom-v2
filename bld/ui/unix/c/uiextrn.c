@@ -30,43 +30,55 @@
 ****************************************************************************/
 
 
+#include <sys/types.h>
 #include "uidef.h"
+#include "uiintern.h"
 #include "uiextrn.h"
 #include "uivirts.h"
 
 
-int         UIConHandle = -1;               /* filedescriptor */
-pid_t       UIProxy;                        /* proxy for all events */
-pid_t       UIRemProxy;                     /* remote proxy if nec.. */
-pid_t       UIPGroup;                       /* process group */
-bool        UIWantShiftChanges = true;      /* tell keyboard app wants to see shift, alt, ... keys... */
-bool        UIDisableShiftChanges = false;  /* Disable checking on non console devices */
-VirtDisplay UIVirt;                         /* Active virtual console functions */
+int     UIConHandle = -1;
+#ifndef __QNX__
+FILE    *UIConFile = NULL;
 
-#ifdef __QNX__
-int         UIConsole = 0;                  /* console number */
-pid_t       UILocalProxy;                   /* proxy's incoming value (usually same as UIProxy */
-nid_t       UIConNid;                       /* Node of console mgr */
-#else
-FILE        *UIConFile = NULL;              /* filedescriptor */
+void    TermRefresh( SAREA *area )
+{
+    _physupdate( area );
+    if( area == NULL ) {
+        UserForcedTermRefresh = true;
+    }
+}
 
-#if defined( SUN )
-int     uicon_putchar( char ch )
+bool    TermKeyboardHit( void )
 {
-    fputc( (unsigned char)ch, UIConFile );
-    return( 0 );
+    CATTR           attr;
+    CURSOR_TYPE     type;
+    CURSORORD       row;
+    CURSORORD       col;
+
+    _uigetcursor( &row, &col, &type, &attr );
+    _uisetcursor( row, col, C_NORMAL, attr );
+    _ui_refresh( 0 );
+    return( _uiwaitkeyb( 0, 0 ) != 0 );
 }
-#elif defined( HP ) && ( ( OSVER < 1100 ) || defined( __GNUC__ ) )
-void    uicon_putchar( int ch )
+
+void TermGetCursor( CURSORORD *row, CURSORORD *col )
 {
-    fputc( ch, UIConFile );
+    CATTR           attr;
+    CURSOR_TYPE     type;
+
+    _uigetcursor( row, col, &type, &attr );
 }
-#else
-int     uicon_putchar( int ch )
+
+void TermSetCursor( CURSORORD row, CURSORORD col )
 {
-    fputc( ch, UIConFile );
-    return( 0 );
+    CATTR           attr;
+    CURSOR_TYPE     type;
+    CURSORORD       oldrow;
+    CURSORORD       oldcol;
+
+    _uigetcursor( &oldrow, &oldcol, &type, &attr );
+    _uisetcursor( row, col, type, attr );
 }
-#endif
 
 #endif

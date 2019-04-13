@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -34,8 +35,9 @@
 #include "uidef.h"
 #include "uidos.h"
 #include "uiattrs.h"
-#include "uidbg.h"
+#include "uicurshk.h"
 #include "biosui.h"
+#include "uicurshk.h"
 
 
 #define _swap(a,b)      {int i; i=a; a=b; b=i;}
@@ -49,12 +51,12 @@
 #endif
 
 static CATTR            OldCursorAttr;
-static ORD              OldCursorRow;
-static ORD              OldCursorCol;
+static CURSORORD        OldCursorRow;
+static CURSORORD        OldCursorCol;
 static CURSOR_TYPE      OldCursorType;
 
-void UIDBG _uioffcursor( void )
-/*****************************/
+void UIHOOK _uioffcursor( void )
+/******************************/
 {
     union REGS      r;
 
@@ -70,8 +72,8 @@ void UIDBG _uioffcursor( void )
 }
 
 
-void UIDBG _uioncursor( void )
-/****************************/
+void UIHOOK _uioncursor( void )
+/*****************************/
 {
     union REGS      r;
 
@@ -163,8 +165,8 @@ static void swapcursor( void )
 }
 
 
-void UIDBG _uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
-/***************************************************************************/
+void UIHOOK _uigetcursor( CURSORORD *row, CURSORORD *col, CURSOR_TYPE *type, CATTR *attr )
+/****************************************************************************************/
 {
     union REGS      r;
 
@@ -191,8 +193,8 @@ void UIDBG _uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
 }
 
 
-void UIDBG _uisetcursor( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
-/**********************************************************************/
+void UIHOOK _uisetcursor( CURSORORD row, CURSORORD col, CURSOR_TYPE typ, CATTR attr )
+/***********************************************************************************/
 {
     if( ( typ != UIData->cursor_type ) ||
         ( row != UIData->cursor_row ) ||
@@ -209,16 +211,16 @@ void UIDBG _uisetcursor( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
 }
 
 
-void UIDBG _uiswapcursor( void )
-/******************************/
+void UIHOOK _uiswapcursor( void )
+/*******************************/
 {
     swapcursor();
     newcursor();
 }
 
 
-void UIDBG _uiinitcursor( void )
-/******************************/
+void UIHOOK _uiinitcursor( void )
+/*******************************/
 {
     savecursor();
     uisetcursor( OldCursorRow, OldCursorCol, OldCursorType, OldCursorAttr );
@@ -226,8 +228,8 @@ void UIDBG _uiinitcursor( void )
 }
 
 
-void UIDBG _uifinicursor( void )
-/******************************/
+void UIHOOK _uifinicursor( void )
+/*******************************/
 {
     _uioncursor();
 }

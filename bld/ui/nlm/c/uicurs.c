@@ -34,6 +34,7 @@
 #include "uidef.h"
 #include "uiattrs.h"
 #include "uinlm.h"
+#include "uicurshk.h"
 
 
 #define _swap(a,b)      {int i; i=a; a=b; b=i;}
@@ -46,12 +47,12 @@
 #define END_NORMAL_CURSOR   14
 
 static CATTR            OldCursorAttr;
-static WORD             OldCursorRow;
-static WORD             OldCursorCol;
+static CURSORORD        OldCursorRow;
+static CURSORORD        OldCursorCol;
 static CURSOR_TYPE      OldCursorType;
 
-void UIAPI uioffcursor( void )
-/****************************/
+void UIHOOK uioffcursor( void )
+/*****************************/
 {
     if( UIData->cursor_on ) {
         HideInputCursor();
@@ -60,8 +61,8 @@ void UIAPI uioffcursor( void )
     UIData->cursor_type = C_OFF;
 }
 
-void UIAPI uioncursor( void )
-/***************************/
+void UIHOOK uioncursor( void )
+/****************************/
 {
     BYTE startline;     /* first cursor scan line */
     BYTE endline;       /* last cursor scan line  */
@@ -99,21 +100,16 @@ void intern newcursor( void )
     }
 }
 
-void UIAPI uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
-/**************************************************************************/
+void UIHOOK uigetcursor( CURSORORD *row, CURSORORD *col, CURSOR_TYPE *type, CATTR *attr )
+/***************************************************************************************/
 {
     BYTE startline;
     BYTE endline;
 
-    WORD roww, colw;
-
     /* unused parameters */ (void)attr;
 
-    colw = wherex();
-    roww = wherey();
-
-    *row = roww;
-    *col = colw;
+    *row = wherey();
+    *col = wherex();
 
     GetCursorShape( &startline, &endline );
 
@@ -130,8 +126,8 @@ void UIAPI uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
     //NYI:  Read the attribute
 }
 
-void UIAPI uisetcursor( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
-/*********************************************************************/
+void UIHOOK uisetcursor( CURSORORD row, CURSORORD col, CURSOR_TYPE typ, CATTR attr )
+/**********************************************************************************/
 {
     if( ( typ != UIData->cursor_type ) || ( row != UIData->cursor_row ) ||
         ( col != UIData->cursor_col ) || ( attr != UIData->cursor_attr ) ) {
@@ -183,23 +179,23 @@ static void swapcursor( void )
     UIData->cursor_on = true;
 }
 
-void UIAPI uiswapcursor( void )
-/*****************************/
+void UIHOOK uiswapcursor( void )
+/******************************/
 {
     swapcursor();
     newcursor();
 }
 
-void UIAPI uiinitcursor( void )
-/*****************************/
+void UIHOOK uiinitcursor( void )
+/******************************/
 {
     savecursor();
     uisetcursor( OldCursorRow, OldCursorCol, OldCursorType, OldCursorAttr );
     uioffcursor();
 }
 
-void UIAPI uifinicursor( void )
-/*****************************/
+void UIHOOK uifinicursor( void )
+/******************************/
 {
     uioncursor();
 }

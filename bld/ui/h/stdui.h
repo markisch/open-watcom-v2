@@ -2,7 +2,7 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2002-2018 The Open Watcom Contributors. All Rights Reserved.
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -49,6 +49,7 @@
 
 #define UIAPI                   /* public API */
 #define UICALLBACK              /* public callback */
+#define UIHOOK                  /* hook functions */
 
 typedef enum ui_event {
     EV_SIGNED_TYPE               = -1,    /* ensure ui_event is signed type, required by uiungetevent */
@@ -475,6 +476,9 @@ typedef unsigned char   ORD;
 typedef unsigned short  MOUSEORD;
 typedef unsigned long   MOUSETIME;
 
+typedef signed short  	CURSORORD;
+#define CURSOR_INVALID  ((CURSORORD)-1)
+
 typedef unsigned short  uisize;
 
 typedef struct sarea {
@@ -617,8 +621,8 @@ typedef struct monitor {
     unsigned        mouse_clk_delay;    /* double click delay               */
     unsigned        tick_delay;         /* clock tick delay                 */
     CATTR           cursor_attr;        /* cursor attribute                 */
-    ORD             cursor_row;         /* cursor row                       */
-    ORD             cursor_col;         /* cursor column                    */
+    CURSORORD       cursor_row;         /* cursor row                       */
+    CURSORORD       cursor_col;         /* cursor column                    */
     CURSOR_TYPE     cursor_type;        /* cursor type                      */
     UI_WINDOW       blank;              /* blank window                     */
     BUFFER          screen;             /* screen                           */
@@ -686,20 +690,17 @@ extern void             UIAPI uidrawbox( VSCREEN _FARD *, SAREA *area, ATTR attr
 extern ui_event         UIAPI uieventsource( bool );
 extern ui_event         UIAPI uieventsourcehook( ui_event );
 extern void             UIAPI uifini( void );
-extern void             UIAPI uifinicursor( void );
 extern void             UIAPI uifinigmouse( void );
 extern void             UIAPI uiflush( void );
 extern void             UIAPI uiflushevent( void );
 extern void             UIAPI uifree( void * );
 extern MOUSETIME        UIAPI uiclock( void );
 extern ui_event         UIAPI uiget( void );
-extern void             UIAPI uigetcursor( ORD _FARD *, ORD _FARD *, CURSOR_TYPE _FARD *, CATTR _FARD * );
 extern ui_event_list    _FARD * UIAPI uigetlist( void );
 extern void             UIAPI uigetmouse( ORD _FARD *, ORD _FARD *, bool _FARD * );
 extern void             UIAPI uiignorealt( void );
 extern bool             UIAPI uiextkeyboard( void );
 extern bool             UIAPI uiinit( init_mode );
-extern void             UIAPI uiinitcursor( void );
 extern bool             UIAPI uiinitgmouse( init_mode );
 extern bool             UIAPI uiinlist( ui_event, ui_event _FARD * );
 extern bool             UIAPI uiinlists( ui_event );
@@ -710,8 +711,6 @@ extern void             UIAPI uimouse( mouse_func );
 extern void             UIAPI uimouseforceoff( void );
 extern void             UIAPI uimouseforceon( void );
 extern void             UIAPI uinocursor( VSCREEN _FARD * );
-extern void             UIAPI uioffcursor( void );
-extern void             UIAPI uioncursor( void );
 extern void             UIAPI uioffmouse( void );
 extern void             UIAPI uionmouse( void );
 extern void             UIAPI uihidemouse( void );
@@ -726,7 +725,6 @@ extern void             UIAPI uirefresh( void );
 extern bool             UIAPI uiremovebackground( void );
 extern bool             UIAPI uiset80col( void );
 extern SAREA            * UIAPI uisetarea( SAREA *,  VSCREEN _FARD * );
-extern void             UIAPI uisetcursor( ORD, ORD, CURSOR_TYPE, CATTR );
 extern void             UIAPI uisetmouse( MOUSEORD, MOUSEORD );
 extern void             UIAPI uisetmouseposn( ORD, ORD );
 extern SAREA            * UIAPI uisetscreenarea( SAREA *, bool, bool );
@@ -736,7 +734,6 @@ extern void             UIAPI uispawnstart( void );
 extern bool             UIAPI uistart( void );
 extern void             UIAPI uistop( void );
 extern void             UIAPI uiswap( void );
-extern void             UIAPI uiswapcursor( void );
 extern void             UIAPI uiswapmouse( void );
 extern void             UIAPI uiungetevent( void );
 extern void             UIAPI uiunprotect( VSCREEN _FARD * );
@@ -806,7 +803,7 @@ extern LP_PIXEL         UIAPI dos_uishadowbuffer( LP_PIXEL vbuff );
 extern void             UIAPI win_uisetmono( void );
 extern void             UIAPI win_uisetcolor( int clr );
 
-extern void             (UICALLBACK __loadds __far win_uihookrtn)( unsigned event, unsigned info );
+extern void             __loadds __far win_uihookrtn( unsigned event, unsigned info );
 #pragma aux win_uihookrtn __parm [__ax] [__cx]
 
 #elif defined( __RDOS__ )

@@ -33,15 +33,16 @@
 #include "uidef.h"
 #include "uiattrs.h"
 #include "uivirts.h"
+#include "uicurshk.h"
 
 
 #define _swap(a,b)      {int i; i=a; a=b; b=i;}
 
-static ORD              OldCursorRow;
-static ORD              OldCursorCol;
+static CURSORORD        OldCursorRow;
+static CURSORORD        OldCursorCol;
 static CURSOR_TYPE      OldCursorType;
 
-void UIAPI uioffcursor( void )
+void UIHOOK uioffcursor( void )
 /*****************************/
 {
     UIData->cursor_type = C_OFF;
@@ -52,7 +53,7 @@ void UIAPI uioffcursor( void )
 }
 
 
-void UIAPI uioncursor( void )
+void UIHOOK uioncursor( void )
 /****************************/
 {
     if( !UIData->cursor_on ) {
@@ -93,21 +94,21 @@ static void swapcursor( void )
 }
 
 
-void UIAPI uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
-/**************************************************************************/
+void UIHOOK uigetcursor( CURSORORD *row, CURSORORD *col, CURSOR_TYPE *type, CATTR *attr )
+/***************************************************************************************/
 {
     _uigetcursor( row, col, type, attr );
 }
 
 
-void UIAPI uisetcursor( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
-/*********************************************************************/
+void UIHOOK uisetcursor( CURSORORD row, CURSORORD col, CURSOR_TYPE typ, CATTR attr )
+/**********************************************************************************/
 {
     _uisetcursor( row, col, typ, attr );
 }
 
 
-void UIAPI uiswapcursor( void )
+void UIHOOK uiswapcursor( void )
 /******************************/
 {
     swapcursor();
@@ -115,11 +116,11 @@ void UIAPI uiswapcursor( void )
 }
 
 
-void UIAPI uiinitcursor( void )
+void UIHOOK uiinitcursor( void )
 /******************************/
 {
-    UIData->cursor_row = (ORD)-1;
-    UIData->cursor_col = (ORD)-1;
+    UIData->cursor_row = CURSOR_INVALID;
+    UIData->cursor_col = CURSOR_INVALID;
     UIData->cursor_type = C_OFF;
     savecursor();
     _uisetcursor( OldCursorRow, OldCursorCol, OldCursorType, 0 );
@@ -127,7 +128,7 @@ void UIAPI uiinitcursor( void )
 }
 
 
-void UIAPI uifinicursor( void )
+void UIHOOK uifinicursor( void )
 /******************************/
 {
     UIData->cursor_row = 0;

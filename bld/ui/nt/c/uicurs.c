@@ -34,17 +34,18 @@
 #include "uidef.h"
 #include "uiattrs.h"
 #include <windows.h>
+#include "uicurshk.h"
 
 
 #define _swap(a,b)      {int i; i=a; a=b; b=i;}
 
 extern HANDLE           OutputHandle;
 
-static ORD              OldCursorRow;
-static ORD              OldCursorCol;
+static CURSORORD        OldCursorRow;
+static CURSORORD        OldCursorCol;
 static CURSOR_TYPE      OldCursorType;
 
-void UIAPI uioffcursor( void )
+void UIHOOK uioffcursor( void )
 {
     CONSOLE_CURSOR_INFO ci;
 
@@ -58,7 +59,7 @@ void UIAPI uioffcursor( void )
 }
 
 
-void UIAPI uioncursor( void )
+void UIHOOK uioncursor( void )
 {
     CONSOLE_CURSOR_INFO ci;
     COORD               cpos;
@@ -98,7 +99,7 @@ static void swapcursor( void )
 }
 
 
-void UIAPI uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
+void UIHOOK uigetcursor( CURSORORD *row, CURSORORD *col, CURSOR_TYPE *type, CATTR *attr )
 {
     *row = UIData->cursor_row;
     *col = UIData->cursor_col;
@@ -107,7 +108,7 @@ void UIAPI uigetcursor( ORD *row, ORD *col, CURSOR_TYPE *type, CATTR *attr )
 }
 
 
-void UIAPI uisetcursor( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
+void UIHOOK uisetcursor( CURSORORD row, CURSORORD col, CURSOR_TYPE typ, CATTR attr )
 {
     if( ( typ != UIData->cursor_type ) ||
         ( row != UIData->cursor_row ) ||
@@ -123,19 +124,19 @@ void UIAPI uisetcursor( ORD row, ORD col, CURSOR_TYPE typ, CATTR attr )
     }
 }
 
-void UIAPI uiswapcursor( void )
+void UIHOOK uiswapcursor( void )
 {
     swapcursor();
     newcursor();
 }
 
 
-void UIAPI uiinitcursor( void )
+void UIHOOK uiinitcursor( void )
 {
     CATTR   tmp;
 
-    UIData->cursor_row = (ORD)-1;
-    UIData->cursor_col = (ORD)-1;
+    UIData->cursor_row = CURSOR_INVALID;
+    UIData->cursor_col = CURSOR_INVALID;
     UIData->cursor_type = C_OFF;
     uigetcursor( &OldCursorRow, &OldCursorCol, &OldCursorType, &tmp );
     UIData->cursor_on = true;
@@ -144,7 +145,7 @@ void UIAPI uiinitcursor( void )
 }
 
 
-void UIAPI uifinicursor( void )
+void UIHOOK uifinicursor( void )
 {
     uioncursor();
 }

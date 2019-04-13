@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -30,5 +31,23 @@
 ****************************************************************************/
 
 
-#define OWDEBUGGER_API
-#include "uirfrsh.c"
+#ifndef _UIINTERN_H_INCLUDED
+#define _UIINTERN_H_INCLUDED
+
+#define uiwrite(s)      write( UIConHandle, s, strlen( s ) )
+#define uiwritec(c)     write( UIConHandle, c, sizeof( c ) - 1 )
+
+extern pid_t            UIProxy;
+extern pid_t            UIPGroup;
+extern bool             UIDisableShiftChanges;
+extern bool             UserForcedTermRefresh;
+
+#ifdef __QNX__
+extern int              UIConsole;
+extern pid_t            UILocalProxy;
+extern pid_t            UIRemProxy;
+extern nid_t            UIConNid;
+extern struct _timesel  __far *_SysTime;
+#endif
+
+#endif
