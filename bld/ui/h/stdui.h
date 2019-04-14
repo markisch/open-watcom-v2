@@ -476,7 +476,7 @@ typedef unsigned char   ORD;
 typedef unsigned short  MOUSEORD;
 typedef unsigned long   MOUSETIME;
 
-typedef signed short  	CURSORORD;
+typedef signed short    CURSORORD;
 #define CURSOR_INVALID  ((CURSORORD)-1)
 
 typedef unsigned short  uisize;
@@ -492,6 +492,7 @@ typedef unsigned char   ATTR;           /* character attributes type */
 typedef int             CATTR;          /* cursor attributes type */
 #define CATTR_VOFF      ((CATTR)(-2))   /* cursor attribute OFF virtual window */
 #define CATTR_OFF       ((CATTR)(-1))   /* cursor attribute OFF global */
+#define CATTR_NONE      0
 
 #define iseditchar( ev )        ( ( ev >= EV_FIRST_EDIT_CHAR ) && ( ev <= EV_LAST_EDIT_CHAR ) )
 #define iskeyboardchar( ev )    ( ( ev >= EV_FIRST_EVENT ) && ( ev <= EV_LAST_KEYBOARD ) )
@@ -600,9 +601,9 @@ typedef struct vscreen {
     const char      _FARD *title;       /* title of virtual screen          */
     SAREA           area;               /* position on physical screen      */
     screen_flags    flags;              /* dialogue, unframed, movable etc. */
-    ORD             row;                /* position of cursor on the screen */
-    ORD             col;                /* position of cursor on the screen */
-    CURSOR_TYPE     cursor;             /* cursor type                      */
+    CURSORORD       cursor_row;         /* position of cursor on the screen */
+    CURSORORD       cursor_col;         /* position of cursor on the screen */
+    CURSOR_TYPE     cursor_type;        /* cursor type                      */
     bool            open;               /* bool: init to false, set by ui   */
     bool            dynamic_title;      /* title is allocated dynamicaly    */
     UI_WINDOW       window;             /* used by the window manager       */
@@ -683,7 +684,7 @@ extern void             UIAPI uiblankscreen( void );
 extern void             UIAPI uiblankattr( ATTR );
 extern void             UIAPI uicntrtext( VSCREEN _FARD *, SAREA *, ATTR, unsigned, const char * );
 extern bool             UIAPI uiconfig( char *, char ** );
-extern void             UIAPI uicursor( VSCREEN _FARD *, ORD, ORD, CURSOR_TYPE );
+extern void             UIAPI uicursor( VSCREEN _FARD *, CURSORORD, CURSORORD, CURSOR_TYPE );
 extern ui_event         UIAPI uidialogevent( VSCREEN _FARD * );
 extern void             UIAPI uidirty( SAREA );
 extern void             UIAPI uidrawbox( VSCREEN _FARD *, SAREA *area, ATTR attr, const char * );
@@ -802,9 +803,6 @@ extern LP_PIXEL         UIAPI dos_uishadowbuffer( LP_PIXEL vbuff );
 
 extern void             UIAPI win_uisetmono( void );
 extern void             UIAPI win_uisetcolor( int clr );
-
-extern void             __loadds __far win_uihookrtn( unsigned event, unsigned info );
-#pragma aux win_uihookrtn __parm [__ax] [__cx]
 
 #elif defined( __RDOS__ )
 

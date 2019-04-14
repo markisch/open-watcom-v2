@@ -2,7 +2,7 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2017-2017 The Open Watcom Contributors. All Rights Reserved.
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -441,8 +441,8 @@ static void TI_REPEAT_CHAR( char c, int n, bool a, ORD x )
     }
 }
 
-int     OldCol= -1,
-        OldRow= -1;
+int   OldCol = -1;
+int   OldRow = -1;
 
 // This macro will pick method "x" for axis "a" if method "x" is faster
 // and usable (ie: less chars, but not zero chars)
@@ -1562,27 +1562,27 @@ QNXDebugPrintf2( "colour[%d, %d]\n", _attr_fore( nval ), _attr_back( nval ) );
     return( nattr );
 }
 
-static int UIHOOK td_getcur( CURSORORD *row, CURSORORD *col, CURSOR_TYPE *type, CATTR *attr )
-/*******************************************************************************************/
+static int UIHOOK td_getcur( CURSORORD *crow, CURSORORD *ccol, CURSOR_TYPE *ctype, CATTR *cattr )
+/***********************************************************************************************/
 {
-    *row = UIData->cursor_row;
-    *col = UIData->cursor_col;
-    *type = UIData->cursor_type;
-    *attr = 0;
+    *crow = UIData->cursor_row;
+    *ccol = UIData->cursor_col;
+    *ctype = UIData->cursor_type;
+    *cattr = CATTR_NONE;
     return( 0 );
 }
 
-static int UIHOOK td_setcur( CURSORORD row, CURSORORD col, CURSOR_TYPE typ, CATTR attr )
-/**************************************************************************************/
+static int UIHOOK td_setcur( CURSORORD crow, CURSORORD ccol, CURSOR_TYPE ctype, CATTR cattr )
+/*******************************************************************************************/
 {
-    /* unused parameters */ (void)attr;
+    /* unused parameters */ (void)cattr;
 
-    if( ( typ != UIData->cursor_type ) ||
-        ( row != UIData->cursor_row ) ||
-        ( col != UIData->cursor_col ) ) {
-        UIData->cursor_type = typ;
-        UIData->cursor_row = row;
-        UIData->cursor_col = col;
+    if( ( ctype != UIData->cursor_type ) ||
+        ( crow != UIData->cursor_row ) ||
+        ( ccol != UIData->cursor_col ) ) {
+        UIData->cursor_type = ctype;
+        UIData->cursor_row = crow;
+        UIData->cursor_col = ccol;
         newcursor();
         if( TermIsQNXTerm ) {
             td_hwcursor();

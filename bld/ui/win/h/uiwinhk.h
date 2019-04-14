@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -24,61 +25,9 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  16-bit Windows Keyboard Event Hook function declaration
 *
 ****************************************************************************/
 
 
-#include <sys/types.h>
-#include "uidef.h"
-#include "uiintern.h"
-#include "uiextrn.h"
-#include "uivirts.h"
-
-
-int     UIConHandle = -1;
-#ifndef __QNX__
-FILE    *UIConFile = NULL;
-
-void    TermRefresh( SAREA *area )
-{
-    _physupdate( area );
-    if( area == NULL ) {
-        UserForcedTermRefresh = true;
-    }
-}
-
-bool    TermKeyboardHit( void )
-{
-    CATTR           cattr;
-    CURSOR_TYPE     ctype;
-    CURSORORD       crow;
-    CURSORORD       ccol;
-
-    _uigetcursor( &crow, &ccol, &ctype, &cattr );
-    _uisetcursor( crow, ccol, C_NORMAL, cattr );
-    _ui_refresh( 0 );
-    return( _uiwaitkeyb( 0, 0 ) != 0 );
-}
-
-void TermGetCursor( CURSORORD *crow, CURSORORD *ccol )
-{
-    CATTR           cattr;
-    CURSOR_TYPE     ctype;
-
-    _uigetcursor( crow, ccol, &ctype, &cattr );
-}
-
-void TermSetCursor( CURSORORD crow, CURSORORD ccol )
-{
-    CATTR           cattr;
-    CURSOR_TYPE     ctype;
-    CURSORORD       oldrow;
-    CURSORORD       oldcol;
-
-    _uigetcursor( &oldrow, &oldcol, &ctype, &cattr );
-    _uisetcursor( crow, ccol, ctype, cattr );
-}
-
-#endif
+extern event_hook_fn    win_uihookrtn;

@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -43,8 +44,8 @@ extern void             SetTermType( const char * );
 #ifndef __QNX__
 extern void             TermRefresh( SAREA *area );
 extern bool             TermKeyboardHit( void );
-extern void             TermGetCursor( CURSORORD *row, CURSORORD *col );
-extern void             TermSetCursor( CURSORORD row, CURSORORD col );
+extern void             TermGetCursor( CURSORORD *crow, CURSORORD *ccol );
+extern void             TermSetCursor( CURSORORD crow, CURSORORD ccol );
 #endif
 
 #endif
