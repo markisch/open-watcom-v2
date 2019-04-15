@@ -502,8 +502,9 @@ typedef int             CATTR;          /* cursor attributes type */
         unsigned char   ch;
         ATTR            attr;
     } PIXEL;
-    #define __FAR __far
+    #define __FAR       __far
     #define HAVE_FAR
+    #define UIDBCS
 #elif defined(__NT__)
     typedef struct pixel {
         unsigned short  ch;
@@ -511,6 +512,7 @@ typedef int             CATTR;          /* cursor attributes type */
     } PIXEL;
     #define __FAR
     #undef HAVE_FAR
+    #define UIDBCS
 #elif defined(__OS2__)
     typedef struct pixel {
         unsigned char   ch;
@@ -518,6 +520,7 @@ typedef int             CATTR;          /* cursor attributes type */
     } PIXEL;
     #define __FAR
     #undef HAVE_FAR
+    #define UIDBCS
 #elif defined(__RDOS__)
     typedef struct pixel {
         unsigned char   ch;
@@ -525,6 +528,7 @@ typedef int             CATTR;          /* cursor attributes type */
     } PIXEL;
     #define __FAR
     #undef HAVE_FAR
+    #undef UIDBCS
 #elif defined(__UNIX__)
     typedef struct pixel {
         unsigned char   ch;
@@ -532,20 +536,23 @@ typedef int             CATTR;          /* cursor attributes type */
     } PIXEL;
     #define __FAR
     #undef HAVE_FAR
+    #undef UIDBCS
 #elif defined( __NETWARE__ )
     typedef struct pixel {
         unsigned char   ch;
         ATTR            attr;
     } PIXEL;
-    #define __FAR __far     /* ?? on netware probably should be near ?? */
+    #define __FAR       __far   /* ?? on netware probably should be near ?? */
     #define HAVE_FAR
-#elif defined( _M_IX86 )
+    #undef UIDBCS
+#elif defined( _M_IX86 )        /* 32-bit DOS */
     typedef struct pixel {
         unsigned char   ch;
         ATTR            attr;
     } PIXEL;
-    #define __FAR __far
+    #define __FAR       __far
     #define HAVE_FAR
+    #define UIDBCS
 #else
     #error pixel structure not configured for system
 #endif
@@ -573,13 +580,6 @@ typedef struct image_hld {
     LP_VOID             hld;
 } IMAGE_HLD;
 
-typedef struct image_def {      // this gets attached to the graphic field
-    LP_VOID             (_FAR *get_image)( void );
-    void                (_FAR *put_image)( void );
-    void                (_FAR *done_image)( void );
-    IMAGE_HLD           __FAR *images;
-} IMAGE_DEF;
-
 typedef void            (_FAR *update_func)(SAREA, void *);
 
 typedef struct ui_window {
@@ -590,10 +590,7 @@ typedef struct ui_window {
     void                _FARD *parm;
     struct ui_window    _FARD *next;
     struct ui_window    _FARD *prev;
-    union {
-        IMAGE_DEF       __FAR *graphic;
-        BUFFER          buffer;
-    }                   type;
+    BUFFER              buffer;
 } UI_WINDOW;
 
 typedef struct vscreen {
@@ -755,7 +752,7 @@ extern void             UIAPI uivmoveblock( VSCREEN _FARD *, SAREA, int, int );
 extern VSCREEN          _FARD * UIAPI uivopen( VSCREEN _FARD * );
 extern VSCREEN          _FARD * UIAPI uivresize( VSCREEN _FARD *, SAREA );
 extern void             UIAPI uivmove( VSCREEN _FARD *, ORD, ORD );
-extern void             UIAPI uivrawput( VSCREEN _FARD *, ORD, ORD, PIXEL _FARD *, unsigned );
+extern void             UIAPI uivrawput( VSCREEN _FARD *, ORD, ORD, LP_PIXEL, unsigned );
 extern void             UIAPI uivsetactive( VSCREEN _FARD * );
 extern void             UIAPI uivsetcursor( VSCREEN _FARD * );
 extern bool             UIAPI uivshow( VSCREEN _FARD * );
