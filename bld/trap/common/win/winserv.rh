@@ -2,7 +2,6 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2015-2016 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -31,7 +30,19 @@
 ****************************************************************************/
 
 
-#include "drwatlog.rh"
-
-
-WINEXPORT BOOL FAR PASCAL LogDialog( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam );
+#define MSG_ABOUT       100
+#define MSG_EXIT        101
+#define MSG_PORT        102
+#define MSG_SWITCHTOPGM 103
+#define MSG_CLEAR       104
+#define RADIO_1         200
+#define RADIO_2         201
+#define RADIO_3         202
+#define RADIO_4         203
+#define EDIT_1          300
+#define SELECT_1        301
+#define BAUD_1200       401
+#define BAUD_2400       402
+#define BAUD_4800       403
+#define BAUD_9600       404
+#define BAUD_19200      405

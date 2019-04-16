@@ -25,13 +25,25 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  Interface to memory display window.
 *
 ****************************************************************************/
 
 
-#include "drwatlog.rh"
+#include "selinfo.rh"
+#include "hdlinfo.rh"
+#include "offset.rh"
 
+#define MEMINFO_SAVE                    400
+#define MEMINFO_SAVE_TO                 401
+#define MEMINFO_SHOW                    403
+#define MEMINFO_AUTO_POS                404
+#define MEMINFO_EXIT                    405
 
-WINEXPORT BOOL FAR PASCAL LogDialog( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam );
+#define MEMINFO_BYTE                    410
+#define MEMINFO_WORD                    411
+#define MEMINFO_DWORD                   412
+#define MEMINFO_CODE_16                 413
+#define MEMINFO_CODE_32                 414
+
+#define MEMINFO_OFFSET                  420

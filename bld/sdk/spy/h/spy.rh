@@ -2,8 +2,7 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2015-2016 The Open Watcom Contributors. All Rights Reserved.
-*    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
+* Copyright (c) 2017-2017 The Open Watcom Contributors. All Rights Reserved.
 *
 *  ========================================================================
 *
@@ -25,13 +24,18 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  Header file for the spy recources ID's.
 *
 ****************************************************************************/
 
 
-#include "drwatlog.rh"
+#include "rcstr.gh"
+#include "uistr.gh"
 
-
-WINEXPORT BOOL FAR PASCAL LogDialog( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam );
+#include "msgs.rh"
+#include "spymsgs.rh"
+#include "msgsel.rh"
+#include "selwin.rh"
+#include "winpick.rh"
+#include "spymenu.rh"
+#include "peekmsg.rh"

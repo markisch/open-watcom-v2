@@ -2,7 +2,6 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2015-2016 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -25,13 +24,16 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  Mark dialog interface.
 *
 ****************************************************************************/
 
 
-#include "drwatlog.rh"
-
-
-WINEXPORT BOOL FAR PASCAL LogDialog( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam );
+/* Constants for mark dialog */
+#define MARK_CANCEL                     IDCANCEL
+#define MARK_OK                         IDOK
+#define MARK_EDIT                       103
+#define MARK_TEXT                       104
+#define MARK_PLAIN                      105
+#define MARK_BOXED                      106
+#define MARK_STYLE_GRP                  107

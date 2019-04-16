@@ -2,7 +2,6 @@
 *
 *                            Open Watcom Project
 *
-* Copyright (c) 2015-2016 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -25,13 +24,16 @@
 *
 *  ========================================================================
 *
-* Description:  WHEN YOU FIGURE OUT WHAT THIS FILE DOES, PLEASE
-*               DESCRIBE IT HERE!
+* Description:  About dialog resource identifiers.
 *
 ****************************************************************************/
 
 
-#include "drwatlog.rh"
-
-
-WINEXPORT BOOL FAR PASCAL LogDialog( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam );
+#define ABOUT_INFO1                 103
+#define ABOUT_INFO2                 104
+#define ABOUT_INFO3                 105
+#define ABOUT_VERSION               106
+#define ABOUT_NAME                  107
+#define ABOUT_ICON                  108
+#define ABOUT_COPYRIGHT             109
+#define APPICON                     101
