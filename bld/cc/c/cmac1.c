@@ -66,6 +66,7 @@ typedef struct nested_macros {
 typedef struct special_macro_names {
     char            *name;
     special_macros  value;
+    macro_flags     flags;
 } special_macro_names;
 
 extern void         DumpMTokens( MACRO_TOKEN *mtok );
@@ -77,18 +78,18 @@ static size_t       MTokenLen;              /* macro token length */
 static MACRO_TOKEN  *ExpandNestedMacros( MACRO_TOKEN *head, bool rescanning );
 
 static struct special_macro_names  SpcMacros[] = {
-    #define pick(s,i)       { s, i },
+    #define pick(s,i,f)     { s, i, f },
     #include "specmac.h"
     #undef pick
 };
 
-static void SpecialMacrosInit( special_macro_names *mac )
+static void SpecialMacroAdd( special_macro_names *mac )
 {
-    MEPTR               mentry;
+    MEPTR           mentry;
 
     mentry = CreateMEntry( mac->name, strlen( mac->name ) );
     mentry->parm_count = (mac_parm_count)mac->value;
-    MacroAdd( mentry, NULL, 0, MFLAG_NONE );
+    MacroAdd( mentry, NULL, 0, mac->flags );
     FreeMEntry( mentry );
 }
 
@@ -104,15 +105,14 @@ void MacroInit( void )
     NestedMacros = NULL;
     TokenList = NULL;
     UndefMacroList = NULL;
-    InitialMacroFlag = MFLAG_DEFINED_BEFORE_FIRST_INCLUDE;
-    AllocMacroSegment( 0x1000 );
-    MacHash = (MEPTR *)MacroSegment;
-    MacroOffset = MacroSegment + MACRO_HASH_SIZE * sizeof( MEPTR );
+    InitialMacroFlags = MFLAG_DEFINED_BEFORE_FIRST_INCLUDE;
+    AllocMacroSegment( MACRO_HASH_SIZE * sizeof( MEPTR ) );
+    MacHash = (MEPTR *)MacroAllocateInSeg( MACRO_HASH_SIZE * sizeof( MEPTR ) );
     for( h = 0; h < MACRO_HASH_SIZE; ++h ) {
         MacHash[h] = NULL;
     }
     for( i = MACRO_FIRST; i <= MACRO_LAST; i++ ) {
-        SpecialMacrosInit( &SpcMacros[i] );
+        SpecialMacroAdd( &SpcMacros[i] );
     }
     TimeInit(); /* grab time and date for __TIME__ and __DATE__ */
 }
@@ -122,7 +122,7 @@ void MacroAddComp( void )
     int             i;
 
     for( i = MACRO_COMP_FIRST; i <= MACRO_COMP_LAST; i++ ) {
-        SpecialMacrosInit( &SpcMacros[i] );
+        SpecialMacroAdd( &SpcMacros[i] );
     }
 }
 
@@ -481,7 +481,7 @@ static MACRO_ARG *CollectParms( MEPTR mentry )
                     break;
                 --bracket;
             } else if( tok == T_COMMA && bracket == 0
-              && ( (mentry->macro_flags & MFLAG_VAR_ARGS) == 0 || parmno != parm_count_reqd - 1 ) ) {
+              && ( !MacroHasVarArgs( mentry ) || parmno != parm_count_reqd - 1 ) ) {
                 if( prev_tok == T_WHITE_SPACE ) {
                     MTOKDEC( MTokenLen );
                 }
@@ -556,10 +556,10 @@ static MACRO_ARG *CollectParms( MEPTR mentry )
         } else if( MTokenLen != 0 ) {
             ++parmno;                   // will cause "too many parms" error
         }
-        if( (mentry->macro_flags & MFLAG_VAR_ARGS) && parmno < ( parm_count_reqd - 1 )
-          || (mentry->macro_flags & MFLAG_VAR_ARGS) == 0 && parmno < parm_count_reqd ) {
+        if( MacroHasVarArgs( mentry ) && parmno < ( parm_count_reqd - 1 )
+          || !MacroHasVarArgs( mentry ) && parmno < parm_count_reqd ) {
             CErr2p( ERR_TOO_FEW_MACRO_PARMS, mentry->macro_name );
-        } else if( (mentry->macro_flags & MFLAG_VAR_ARGS) == 0 && parmno > parm_count_reqd ) {
+        } else if( !MacroHasVarArgs( mentry ) && parmno > parm_count_reqd ) {
             if( parm_count_reqd > 0 ) {
                 CWarn2p( WARN_PARM_COUNT_MISMATCH, ERR_TOO_MANY_MACRO_PARMS, mentry->macro_name  );
             }

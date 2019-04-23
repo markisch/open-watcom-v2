@@ -38,9 +38,10 @@
 #define GetMacroParmCount(m)    ((m)->parm_count - 1)
 #define MacroWithParenthesis(m) ((m)->parm_count > 0)
 #define MacroIsSpecial(m)       ((m)->macro_defn == 0)
+#define MacroHasVarArgs(m)      (((m)->macro_flags & MFLAG_HAS_VAR_ARGS) != 0)
 
 typedef enum special_macros {
-    #define pick(s,i)       i,
+    #define pick(s,i,f)     i,
     #include "specmac.h"
     #undef pick
 } special_macros;
@@ -64,7 +65,8 @@ typedef enum macro_flags {
     MFLAG_CAN_BE_REDEFINED              =   0x02,
     MFLAG_USER_DEFINED                  =   0x04,
     MFLAG_REFERENCED                    =   0x08,
-    MFLAG_VAR_ARGS                      =   0x10,   // macro has varargs.
+    MFLAG_HAS_VAR_ARGS                  =   0x10,   // macro has varargs.
+    MFLAG_HIDDEN                        =   0x20,
 } macro_flags;
 
 typedef struct  macro_entry {
