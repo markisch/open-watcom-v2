@@ -2,6 +2,7 @@
 *
 *                            Open Watcom Project
 *
+* Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
 *    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
@@ -33,6 +34,7 @@
 #include "scan.h"
 #include <stddef.h>
 #include "cgmisc.h"
+#include "cmacsupp.h"
 
 
 #define HasVarArgs(m)      (((m) & MFLAG_HAS_VAR_ARGS) != 0)
@@ -428,20 +430,16 @@ static MEPTR GrabTokens( mac_parm_count parm_count, macro_flags mflags, MPPTR fo
 {
     MEPTR           mentry;
     MEPTR           new_mentry;
-    size_t          len;
     TOKEN           prev_token;
     TOKEN           prev_non_ws_token;
     size_t          mlen;
     mac_parm_count  parmno;
 
-    mentry = CreateMEntry( mac_name, strlen( mac_name ) );
+    mentry = CreateMEntry( mac_name, 0 );
     mentry->parm_count = parm_count;
-    mentry->src_loc.fno = loc->fno;
-    mentry->src_loc.line = loc->line;
+    mentry->src_loc = *loc;
     mlen = mentry->macro_len;
     mentry->macro_defn = mlen;
-    MacroReallocOverflow( mlen, 0 );
-    MacroCopy( mentry, MacroOffset, mlen );
     prev_token = T_NULL;
     prev_non_ws_token = T_NULL;
     if( CurToken != T_NULL ) {
@@ -454,22 +452,22 @@ static MEPTR GrabTokens( mac_parm_count parm_count, macro_flags mflags, MPPTR fo
         }
     }
     for( ; CurToken != T_NULL && CurToken != T_EOF ; ) {
-        MTOK( TokenBuf ) = CurToken;
-        len = sizeof( TOKEN );
         switch( CurToken ) {
         case T_SHARP:
             /* if it is a function-like macro definition */
             if( parm_count != 0 ) {
                 CurToken = T_MACRO_SHARP;
-                MTOK( TokenBuf ) = CurToken;
             }
+            MacroSegmentAddToken( &mlen, CurToken );
             break;
         case T_SHARP_SHARP:
-            MTOK( TokenBuf ) = T_MACRO_SHARP_SHARP;
+            CurToken = T_MACRO_SHARP_SHARP;
+            MacroSegmentAddToken( &mlen, CurToken );
             break;
         case T_WHITE_SPACE:
-            if( prev_token == T_WHITE_SPACE )
-                MTOKDEC( len );
+            if( prev_token != T_WHITE_SPACE ) {
+                MacroSegmentAddToken( &mlen, CurToken );
+            }
             break;
         case T_ID:
             parmno = FormalParm( formal_parms );
@@ -479,50 +477,47 @@ static MEPTR GrabTokens( mac_parm_count parm_count, macro_flags mflags, MPPTR fo
                 } else {
                     CurToken = T_MACRO_PARM;
                 }
-                MTOK( TokenBuf ) = CurToken;
-                MTOKPARM( TokenBuf + len ) = parmno - 1;
-                MTOKPARMINC( len );
+            }
+            MacroSegmentAddToken( &mlen, CurToken );
+            if( parmno != 0 ) {
+                MacroSegmentAddChar( &mlen, parmno - 1 );
             } else {
-                memcpy( TokenBuf + len, Buffer, TokenLen + 1 );
-                len += TokenLen + 1;
+                MacroSegmentAddMem( &mlen, Buffer, TokenLen + 1 );
             }
             break;
         case T_BAD_CHAR:
-            TokenBuf[len++] = Buffer[0];
+            MacroSegmentAddToken( &mlen, CurToken );
+            MacroSegmentAddChar( &mlen, Buffer[0] );
             if( Buffer[1] != '\0' ) {
-                MTOK( TokenBuf + len ) = T_WHITE_SPACE;
-                MTOKINC( len );
+                CurToken = T_WHITE_SPACE;
+                MacroSegmentAddToken( &mlen, CurToken );
             }
             break;
         case T_STRING:
             if( CompFlags.wide_char_string ) {
                 CurToken = T_LSTRING;
-                MTOK( TokenBuf ) = CurToken;
             }
             /* fall through */
         case T_CONSTANT:
         case T_LSTRING:
         case T_BAD_TOKEN:
         case T_PPNUMBER:
-            memcpy( TokenBuf + len, Buffer, TokenLen + 1 );
-            len += TokenLen + 1;
+            MacroSegmentAddToken( &mlen, CurToken );
+            MacroSegmentAddMem( &mlen, Buffer, TokenLen + 1 );
             break;
         default:
+            MacroSegmentAddToken( &mlen, CurToken );
             break;
         }
         if( CurToken != T_WHITE_SPACE ) {
-            if( prev_non_ws_token == T_MACRO_SHARP
-              && CurToken != T_MACRO_PARM && CurToken != T_MACRO_VAR_PARM ) {
+            if( prev_non_ws_token == T_MACRO_SHARP && CurToken != T_MACRO_PARM && CurToken != T_MACRO_VAR_PARM ) {
                 CErr1( ERR_MUST_BE_MACRO_PARM );
-                MTOK( MacroOffset + mlen - sizeof( TOKEN ) ) = T_SHARP;
+//                MTOK( MacroOffset + mlen - sizeof( TOKEN ) ) = T_SHARP;
             }
             prev_non_ws_token = CurToken;
         }
         prev_token = CurToken;
         CurToken = ScanToken();
-        MacroReallocOverflow( mlen + len, mlen );
-        MacroCopy( TokenBuf, MacroOffset + mlen, len );
-        mlen += len;
     }
     if( prev_non_ws_token == T_MACRO_SHARP ) {
         CErr1( ERR_MUST_BE_MACRO_PARM );
@@ -530,16 +525,14 @@ static MEPTR GrabTokens( mac_parm_count parm_count, macro_flags mflags, MPPTR fo
     if( prev_token == T_WHITE_SPACE ) {
         MTOKDEC( mlen );
     }
-    MacroReallocOverflow( mlen + sizeof( TOKEN ), mlen );
-    MTOK( MacroOffset + mlen ) = T_NULL;
-    MTOKINC( mlen );
+    MacroSegmentAddToken( &mlen, T_NULL );
     if( prev_non_ws_token == T_MACRO_SHARP_SHARP ) {
         CErr1( ERR_MISPLACED_SHARP_SHARP );
     }
-    mentry->macro_len = mlen;
-    new_mentry = MacroDefine( mentry, mlen, mflags );
-    FreeMEntry( mentry );
-    MacroSize += mlen;
+    new_mentry = MacroDefine( mlen, mflags );
+    if( new_mentry != NULL ) {
+        MacroSize += mlen;
+    }
     return( new_mentry );
 }
 
