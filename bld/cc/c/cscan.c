@@ -125,7 +125,7 @@ static void reScanGetNextCharUndo( int c )
 {
     /* unused parameters */ (void)c;
 
-    --SrcFile->src_ptr;
+    SrcFile->src_ptr--;
     CompFlags.rescan_buffer_done = false;
 }
 
@@ -205,15 +205,14 @@ TOKEN KwLookup( const char *buf, size_t len )
         case T_INLINE:
         case T__PRAGMA:
             if( !CompFlags.extensions_enabled )
-                token = T_ID;
+                return( T_ID );
             break;
         case T_RESTRICT:
         case T__COMPLEX:
         case T__IMAGINARY:
         case T__BOOL:
         case T___OW_IMAGINARY_UNIT:
-            token = T_ID;
-            break;
+            return( T_ID );
         }
     }
 
@@ -1658,7 +1657,7 @@ bool ReScanToken( void )
     if( CurToken == T_STRING && CompFlags.wide_char_string ) {
         CurToken = T_LSTRING;
     }
-    --SrcFile->src_ptr;
+    SrcFile->src_ptr--;
 
     SrcFile = oldSrcFile;
     CurrChar = saved_currchar;
