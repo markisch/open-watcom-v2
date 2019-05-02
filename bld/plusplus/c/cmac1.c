@@ -43,6 +43,9 @@
 #include "dumpapi.h"
 
 
+#define MACRO_END_CHAR          'Z'
+#define MACRO_END_STRING        "Z-<end of macro>"
+
 typedef struct _tokens TOKEN_LIST;
 struct _tokens {
     TOKEN_LIST  *next;
@@ -70,11 +73,11 @@ struct nested_macros {
     unsigned        substituting_parms  : 1;
 };
 
-static carve_t carveNESTED_MACRO;
+static carve_t      carveNESTED_MACRO;
 static NESTED_MACRO *nestedMacros;
-static MACRO_TOKEN *scannerTokenList;
-static MACRO_TOKEN *internalTokenList;
-static unsigned macroDepth;
+static MACRO_TOKEN  *scannerTokenList;
+static MACRO_TOKEN  *internalTokenList;
+static unsigned     macroDepth;
 
 static MACRO_TOKEN  *macroExpansion( MEPTR, bool );
 static MACRO_TOKEN  *nestedMacroExpansion( MEPTR, bool );
@@ -170,21 +173,27 @@ static size_t copyMTokToBuffer( MACRO_TOKEN *mtok )
 }
 
 
-static MACRO_TOKEN *doGetMacroToken(// GET NEXT TOKEN
-    MACRO_TOKEN *list,              // - list of tokens
+static void doGetMacroToken(        // GET NEXT TOKEN
+    bool internal,                  // - list of tokens
     bool doing_macro_expansion )    // - true ==> doing an expansion
 {
     char        *token_end;
     MACRO_TOKEN *mtok;
+    MACRO_TOKEN **mlist;
     size_t      i;
     struct {
         unsigned keep_token     : 1;
         unsigned next_token     : 1;
     } flag;
 
+    if( internal ) {
+        mlist = &internalTokenList;
+    } else {
+        mlist = &scannerTokenList;
+    }
     CurToken = T_NULL;
     for(;;) {
-        mtok = list;
+        mtok = *mlist;
         if( mtok == NULL ) {
             CompFlags.use_macro_tokens = false;
             break;
@@ -198,16 +207,31 @@ static MACRO_TOKEN *doGetMacroToken(// GET NEXT TOKEN
             if( ! doing_macro_expansion ) {
                 CurToken = KwLookup( i );
                 TokenLen = i;
+                if( CurToken == T__PRAGMA ) {
+                    *mlist = mtok->next;
+                    CMemFree( mtok );
+                    CurToken = Process_Pragma( internal );
+                    mtok = *mlist;
+                    flag.keep_token = true;
+                }
             }
             break;
         case T_ID:
         case T_SAVED_ID:
             if( doing_macro_expansion ) {
                 CurToken = T_ID;
+                TokenLen = i;
             } else {
                 CurToken = KwLookup( i );
+                TokenLen = i;
+                if( CurToken == T__PRAGMA ) {
+                    *mlist = mtok->next;
+                    CMemFree( mtok );
+                    CurToken = Process_Pragma( internal );
+                    mtok = *mlist;
+                    flag.keep_token = true;
+                }
             }
-            TokenLen = i;
             break;
         case T_BAD_TOKEN:
         case T_CONSTANT:
@@ -233,28 +257,27 @@ static MACRO_TOKEN *doGetMacroToken(// GET NEXT TOKEN
         case T_BAD_CHAR:
             break;
         case T_NULL:
-            if( Buffer[0] == 'Z' ) {    // if end of macro
+            if( Buffer[0] == MACRO_END_CHAR ) {    // if end of macro
                 deleteNestedMacro();
             }
             flag.next_token = true;
             break;
         }
-        if( ! flag.keep_token ) {
-            list = mtok->next;
+        if( !flag.keep_token ) {
+            *mlist = mtok->next;
             CMemFree( mtok );
         }
-        if( ! flag.next_token ) {
+        if( !flag.next_token ) {
             break;
         }
     }
     DumpMacToken();
-    return( list );
 }
 
 void GetMacroToken(                 // GET NEXT TOKEN
     bool doing_macro_expansion )    // - true ==> doing an expansion
 {
-    scannerTokenList = doGetMacroToken( scannerTokenList, doing_macro_expansion );
+    doGetMacroToken( false, doing_macro_expansion );
 }
 
 static size_t copySafe( size_t i, const char *m )
@@ -421,7 +444,7 @@ static TOKEN nextMToken( TOKEN prev_token )
 {
     ppctl_t old_ppctl;
 
-    internalTokenList = doGetMacroToken( internalTokenList, true );
+    doGetMacroToken( true, true );
     if( CurToken == T_NULL ) {
         if( ScanOptionalComment() ) {
             CurToken = T_WHITE_SPACE;
@@ -847,7 +870,7 @@ static MACRO_TOKEN *expandNestedMacros( MACRO_TOKEN *head, bool rescanning )
             }
         } else if( mtok->token == T_NULL ) {
             toklist = mtok->next;
-            if( mtok->data[0] == 'Z' ) {        // end of a macro
+            if( mtok->data[0] == MACRO_END_CHAR ) {        // end of a macro
                 rescanning = nestedMacros->rescanning;
                 deleteNestedMacro();
                 CMemFree( mtok );
@@ -887,13 +910,28 @@ static MACRO_TOKEN *expandNestedMacros( MACRO_TOKEN *head, bool rescanning )
     return( head );
 }
 
-static MACRO_TOKEN *glue2Tokens( MACRO_TOKEN *first, MACRO_TOKEN *second )
+static MACRO_TOKEN *reTokenBuffer( const char *buffer )
 {
     MACRO_TOKEN *head;
     MACRO_TOKEN **ptail;
-    size_t      i;
     bool        ppscan_mode;
     bool        finished;
+
+    ppscan_mode = InitPPScan();
+    ReScanInit( buffer );
+    head = NULL;
+    ptail = &head;
+    for( finished = false; !finished; ) {
+        finished = ReScanToken();
+        ptail = buildTokenOnEnd( ptail, CurToken, Buffer );
+    }
+    FiniPPScan( ppscan_mode );
+    return( head );
+}
+
+static MACRO_TOKEN *glue2Tokens( MACRO_TOKEN *first, MACRO_TOKEN *second )
+{
+    size_t      i;
 
     i = 10;
     Buffer[i] = '\0';
@@ -903,16 +941,7 @@ static MACRO_TOKEN *glue2Tokens( MACRO_TOKEN *first, MACRO_TOKEN *second )
     if( second != NULL ) {
         i = expandMacroToken( i, second );
     }
-    ppscan_mode = InitPPScan();
-    ReScanInit( &Buffer[10] );
-    head = NULL;
-    ptail = &head;
-    for( finished = false; !finished; ) {
-        finished = ReScanToken();
-        ptail = buildTokenOnEnd( ptail, CurToken, Buffer );
-    }
-    FiniPPScan( ppscan_mode );
-    return( head );
+    return( reTokenBuffer( &Buffer[10] ) );
 }
 
 static MACRO_TOKEN *glueTokens( MACRO_TOKEN *head )
@@ -1309,7 +1338,7 @@ static MACRO_TOKEN *macroExpansion( MEPTR mentry, bool rescanning )
         head = glueTokens( head );
         markUnexpandableIds( head );
     }
-    head = appendToken( head, T_NULL, "Z-<end of macro>" );
+    head = appendToken( head, T_NULL, MACRO_END_STRING );
     return( head );
 }
 
@@ -1336,5 +1365,47 @@ void DefineAlternativeTokens(   // DEFINE ALTERNATIVE TOKENS
 
     for( i = MACRO_ALT_FIRST; i <= MACRO_ALT_LAST; ++i ) {
         MacroSpecialAdd( SpcMacros[i].name, SpcMacros[i].value, SpcMacros[i].flags );
+    }
+}
+
+
+void InsertReScanPragmaTokens( const char *pragma, bool internal )
+{
+    MACRO_TOKEN *toklist;
+
+    toklist = reTokenBuffer( pragma );
+    if( toklist != NULL ) {
+        MACRO_TOKEN *old_list;
+        if( internal ) {
+            old_list = internalTokenList;
+            internalTokenList = toklist;
+        } else {
+            old_list = scannerTokenList;
+            scannerTokenList = toklist;
+        }
+        while( toklist->next != NULL ) {
+            toklist = toklist->next;
+        }
+        toklist->next = buildAToken( T_PRAGMA_END, "" );
+        toklist = toklist->next;
+        toklist->next = old_list;
+        CompFlags.use_macro_tokens = true;
+    }
+}
+
+void InsertToken( TOKEN token, const char *str, bool internal )
+{
+    MACRO_TOKEN *toklist;
+
+    toklist = buildAToken( token, str );
+    if( toklist != NULL ) {
+        if( internal ) {
+            toklist->next = internalTokenList;
+            internalTokenList = toklist;
+        } else {
+            toklist->next = scannerTokenList;
+            scannerTokenList = toklist;
+        }
+        CompFlags.use_macro_tokens = true;
     }
 }
