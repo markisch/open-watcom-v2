@@ -171,17 +171,17 @@ STATIC NKLIST   *noKeepList;            /* contains the list of files that
                                            needs to be cleaned when wmake
                                            exits */
 
-STATIC bool KeywordEqualUcase( const char *kwd, const char *start, const char *end )
-/***********************************************************************************
+STATIC bool KeywordEqualUcase( const char *kwd, const char *start, bool anyterm )
+/********************************************************************************
  * check string for keyword (upper cased)
  */
 {
-    while( *kwd != NULLCHAR && start < end ) {
+    while( *kwd != NULLCHAR ) {
         if( *kwd++ != ctoupper( *start++ ) ) {
             return( false );
         }
     }
-    return( *kwd == NULLCHAR && start == end );
+    return( cisws( *start ) || *start == NULLCHAR || anyterm && !cisalpha( *start ) );
 }
 
 STATIC char *createTmpFileName( void )
@@ -614,23 +614,8 @@ STATIC RET_T percentWrite( char *arg, enum write_type type )
     if( Glob.noexec ) {
         return( RET_SUCCESS );
     }
-
-    fn = p = SkipWS( arg );
-    if( *p != '\"' ) {
-        while( cisfilec( *p ) ) {
-            ++p;
-        }
-    } else {
-        ++p;    // Skip the first quote
-        ++fn;
-        while( *p != '\"' && *p != NULLCHAR ) {
-            ++p;
-        }
-        if( *p != NULLCHAR ) {
-            *p++ = NULLCHAR;
-        }
-    }
-
+    /* handle LFN */
+    p = GetFixFNameLong( arg, &fn, true );
     if( *p != NULLCHAR ) {
         if( !cisws( *p ) ) {
             switch( type ) {
@@ -655,14 +640,12 @@ STATIC RET_T percentWrite( char *arg, enum write_type type )
         text = p;           /* set text pointer */
         p += strlen( p );   /* find null terminator */
     } else {
-        *p = NULLCHAR;      /* terminate file name */
         text = p;           /* set text pointer */
     }
 
     /* now text points to the beginning of string to write, and p points to
      * the end of the string.  fn points to the name of the file to write to
      */
-    FixName( fn );
     if( type == WR_CREATE || currentFileName == NULL || !FNameEq( currentFileName, fn ) ) {
         closeCurrentFile();
         currentFileName = StrDupSafe( fn );
@@ -699,7 +682,19 @@ STATIC RET_T percentWrite( char *arg, enum write_type type )
 STATIC RET_T percentErase( char *arg )
 /************************************/
 {
-    if( 0 == unlink( FixName( arg ) ) ) {
+    char    *fn;
+    char    *p;
+
+    /* handle LFN */
+    p = GetFixFNameLong( arg, &fn, true );
+    if( *p != NULLCHAR && !cisws( *p ) ) {
+        PrtMsg( ERR | SYNTAX_ERROR_IN, percentCmds[PER_RENAME] );
+        PrtMsg( INF | PRNTSTR, "File" );
+        PrtMsg( INF | PRNTSTR, fn );
+        return( RET_ERROR );
+    }
+    *p = NULLCHAR;      /* terminate file name */
+    if( 0 == unlink( fn ) ) {
         return( RET_SUCCESS );
     }
     return( RET_ERROR );
@@ -717,48 +712,19 @@ STATIC RET_T percentRename( char *arg )
         return( RET_SUCCESS );
     }
 
-    /* Get first file name, must end in space but may be surrounded by double quotes */
-    fn1 = p = SkipWS( arg );
-    if( *p != '\"' ) {
-        while( cisfilec( *p ) ) {
-            ++p;
-        }
-    } else {
-        ++p;    // Skip the first quote
-        ++fn1;
-        while( *p != '\"' && *p != NULLCHAR ) {
-            ++p;
-        }
-        if( *p != NULLCHAR ) {
-            *p++ = NULLCHAR;
-        }
-    }
-
+    /* Get first LFN */
+    p = GetFixFNameLong( arg, &fn1, true );
     if( *p == NULLCHAR || !cisws( *p ) ) {
         PrtMsg( ERR | SYNTAX_ERROR_IN, percentCmds[PER_RENAME] );
         PrtMsg( INF | PRNTSTR, "First file" );
-        PrtMsg( INF | PRNTSTR, p );
+        PrtMsg( INF | PRNTSTR, fn1 );
         return( RET_ERROR );
     }
     *p++ = NULLCHAR;        /* terminate first file name */
-
-    /* Get second file name as well */
-    fn2 = p = SkipWS( p );
-    if( *p != '\"' ) {
-        while( cisfilec( *p ) ) {
-            ++p;
-        }
-    } else {
-        ++p;    // Skip the first quote
-        ++fn2;
-        while( *p != '\"' && *p != NULLCHAR ) {
-            ++p;
-        }
-        if( *p != NULLCHAR ) {
-            *p++ = NULLCHAR;
-        }
-    }
-
+    /* skip ws after first and before second file name */
+    p = SkipWS( p );
+    /* Get second LFN as well */
+    p = GetFixFNameLong( p, &fn2, true );
     if( *p != NULLCHAR && !cisws( *p ) ) {
         PrtMsg( ERR | SYNTAX_ERROR_IN, percentCmds[PER_RENAME] );
         return( RET_ERROR );
@@ -929,7 +895,7 @@ STATIC RET_T handleSet( char *cmd )
         return( RET_SUCCESS );
     }
 
-    p = SkipWS( cmd + 3 );      /* find first non-ws after "SET" */
+    p = SkipWS( cmd + 3 );      /* skip ws after "SET" */
     if( *p == NULLCHAR ) {      /* just "SET" with no options... pass on */
         return( mySystem( cmd, cmd ) );
     }
@@ -939,7 +905,7 @@ STATIC RET_T handleSet( char *cmd )
     SkipUntilWSorEqual( p );
     endname = p;
 
-    p = SkipWS( p );            /* trim ws after name */
+    p = SkipWS( p );            /* skip ws after name */
     if( *p != '=' || endname == name ) {
         PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_SET] );
         return( RET_ERROR );
@@ -949,7 +915,7 @@ STATIC RET_T handleSet( char *cmd )
 
     ++p;                        /* advance to character after '=' */
 
-                        /* +1 for '=' (already +1 for NULLCHAR in ENV_TRACKER) */
+    /* +1 for '=' (already +1 for NULLCHAR in ENV_TRACKER) */
     env = MallocSafe( sizeof( *env ) + 1 + ( endname - name ) + strlen( p ) );
     FmtStr( env->value, "%s=%s", name, p );
     retcode = PutEnvSafe( env );
@@ -987,9 +953,9 @@ STATIC RET_T handleEcho( const char *cmd )
 
 STATIC RET_T handleIf( char *cmd )
 /*********************************
- *          { ERRORLEVEL <number> }
- * IF [NOT] { <str1> == <str2>    } <command>
- *          { EXIST <file>        }
+ *                      { ERRORLEVEL {ws}+ <number>    }
+ * IF {ws}+ [NOT {ws}+] { <str1> {ws}* == {ws}* <str2> } {ws}+ <command>
+ *                      { EXIST {ws}+ <file>           }
  */
 {
     bool        not;        /* flag for not keyword                     */
@@ -1011,86 +977,86 @@ STATIC RET_T handleIf( char *cmd )
     }
     closeCurrentFile();
 
-    p = SkipWS( cmd + 2 );      /* find first non-ws after "IF" */
+    p = SkipWS( cmd + 2 );      /* skip ws after "IF" */
     if( *p == NULLCHAR ) {
         PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
         return( RET_ERROR );
     }
 
-    not = KeywordEqualUcase( "NOT ", p, p + 4 );
-    if( not ) {             /* discard the "NOT" get next word */
-        p = SkipWS( p + 4 );
+    not = KeywordEqualUcase( "NOT", p, false );
+    if( not ) {
+        p = SkipWS( p + 3 );    /* skip ws after "NOT" */
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
     }
 
-    if( KeywordEqualUcase( "ERRORLEVEL ", p, p + 11 ) ) {
-        tmp2 = p = SkipWS( p + 11 );
+    if( KeywordEqualUcase( "ERRORLEVEL", p, false ) ) {
+        p = SkipWS( p + 10 );    /* skip ws after "ERRORLEVEL" */
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
+        tmp2 = p;
         p = FindNextWS( p );
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
-        *p = NULLCHAR;
+        *p++ = NULLCHAR;
         condition = ( lastErrorLevel >= atoi( tmp2 ) );
-    } else if( KeywordEqualUcase( "EXIST ", p, p + 6 ) ) {
-        tmp2 = p = SkipWS( p + 6 );
+    } else if( KeywordEqualUcase( "EXIST", p, false ) ) {
+        p = SkipWS( p + 5 );        /* skip ws after "EXIST" */
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
-        p = FindNextWS( p );
+        // handle LFN
+        p = GetFixFNameLong( p, &tmp2, false );
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
-        *p = NULLCHAR;
-
-        // handle long filenames
-        RemoveDoubleQuotes( tmp2, strlen( tmp2 ) + 1, tmp2 );
+        *p++ = NULLCHAR;            /* terminate file name */
 
         file = DoWildCard( tmp2 );
         condition = ( ( file != NULL ) && CacheExists( file ) );
         /* abandon rest of entries if any */
         DoWildCardClose();
     } else {
-        tmp1 = p;                   /* find first word after IF [NOT] */
-        end1 = p = FindNextWSorEqual( p );
+        tmp1 = p;                   /* find first string after IF [NOT] */
+        p = FindNextWSorEqual( p );
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
-        p = SkipWS( p );
+        end1 = p;
+        p = SkipWS( p );            /* skip ws after first string and before "==" */
         if( p[0] != '=' || p[1] != '=' ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
-        tmp2 = p = SkipWS( p + 2 );
+        p = SkipWS( p + 2 );        /* skip ws after "==" and before second string */
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
-
+        tmp2 = p;
         p = FindNextWS( p );
         if( *p == NULLCHAR ) {
             PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
             return( RET_ERROR );
         }
+        /* compare first and second strings */
         condition = ( end1 - tmp1 == p - tmp2 && memcmp( tmp1, tmp2, end1 - tmp1 ) == 0 );
     }
 
-    p = SkipWS( p + 1 );
+    p = SkipWS( p );   /* skip ws before <command> */
     if( *p == NULLCHAR ) {
         PrtMsg( ERR | SYNTAX_ERROR_IN, dosInternals[COM_IF] );
         return( RET_ERROR );
     }
-
     if( not ^ condition ) {
         return( execLine( p ) );
     }
@@ -1106,9 +1072,10 @@ STATIC RET_T handleForSyntaxError( void )
 }
 
 
-STATIC RET_T getForArgs( char *line, const char **pvar, char **pset,
-    const char **pcmd )
-/******************************************************************/
+STATIC RET_T getForArgs( char *line, const char **pvar, char **pset, const char **pcmd )
+/***************************************************************************************
+ * "FOR" {ws}* "%"["%"]<var> {ws}+ "IN" {ws}* "("<set>")" {ws}* "DO" {ws}+ <command>
+ */
 {
     char    *p;
 
@@ -1116,8 +1083,9 @@ STATIC RET_T getForArgs( char *line, const char **pvar, char **pset,
 
     /* remember we can hack up line all we like... */
 
-    p = SkipWS( line + 3 ); /* find first non-ws after "FOR" */
-                            /* got <var>, now test if legal */
+    p = SkipWS( line + 3 ); /* skip ws after "FOR" */
+
+    /* got "%"["%"]<var>, now test if legal */
     if( p[0] != '%' ) {
         return( handleForSyntaxError() );
     }
@@ -1127,23 +1095,21 @@ STATIC RET_T getForArgs( char *line, const char **pvar, char **pset,
     }
     *pvar = (const char *)p;
 
-                            /* move to end of <var> */
+    /* move to end of <var> */
     while( cisalpha( *p ) || *p == '%' ) {
         ++p;
     }
-
     if( *p == NULLCHAR ) {  /* premature eol? */
         return( handleForSyntaxError() );
     }
+    *p++ = NULLCHAR;        /* terminate variable name */
 
-    *p = NULLCHAR;          /* truncate variable name */
-
-    p = SkipWS( p + 1 );    /* move to "in" */
-    if( !KeywordEqualUcase( "IN ", p, p + 3 ) ) {
+    p = SkipWS( p );        /* skip ws before "IN" */
+    if( !KeywordEqualUcase( "IN", p, true ) ) {
         return( handleForSyntaxError() );
     }
 
-    p = SkipWS( p + 3 );    /* move to ( before <set> */
+    p = SkipWS( p + 2 );    /* skip ws before "("<set>")" */
     if( p[0] != '(' ) {
         return( handleForSyntaxError() );
     }
@@ -1154,14 +1120,16 @@ STATIC RET_T getForArgs( char *line, const char **pvar, char **pset,
     if( *p == NULLCHAR ) {
         return( handleForSyntaxError() );
     }
-    *p = NULLCHAR;          /* terminate set string */
+    *p++ = NULLCHAR;        /* terminate set string */
 
-    p = SkipWS( p + 1 );    /* move to "do" */
-    if( !KeywordEqualUcase( "DO ", p, p + 3 ) ) {
+    p = SkipWS( p );        /* skip ws before "DO" */
+    if( !KeywordEqualUcase( "DO", p, false ) ) {
         return( handleForSyntaxError() );
     }
-
-    p = SkipWS( p + 3 );    /* move to beginning of cmd */
+    p = SkipWS( p + 2 );    /* skip ws before <command> */
+    if( *p == NULLCHAR ) {
+        return( handleForSyntaxError() );
+    }
 
     *pcmd = (const char *)p;
 
@@ -1224,7 +1192,7 @@ STATIC void doForSubst( const char *var, size_t varlen,
 #endif
 STATIC RET_T handleFor( char *line )
 /***********************************
- * "FOR" {ws}* "%"["%"]<var> {ws}+ "IN" {ws}+ "("<set>")" {ws}+ "DO" {ws}+ <cmd>
+ * "FOR" {ws}* "%"["%"]<var> {ws}+ "IN" {ws}* "("<set>")" {ws}* "DO" {ws}+ <command>
  */
 {
     static bool     busy = false;   /* recursion protection */
@@ -1310,6 +1278,7 @@ STATIC RET_T handleCD( char *cmd )
 /********************************/
 {
     char        *p;     // pointer to walk with
+    char        *path;
 
 #ifdef DEVELOPMENT
     PrtMsg( DBG | INF | INTERPRETING, dosInternals[COM_CD] );
@@ -1332,11 +1301,11 @@ STATIC RET_T handleCD( char *cmd )
         }
     }
 
-    // handle long filenames
-    RemoveDoubleQuotes( p, strlen( p ) + 1, p );
-
-    if( chdir( p ) != 0 ) {         /* an error changing path */
-        PrtMsg( ERR | CHANGING_DIR, p );
+    // handle LFN
+    p = GetFixFNameLong( p, &path, true );
+    *p = NULLCHAR;      /* terminate path */
+    if( chdir( path ) != 0 ) {         /* an error changing path */
+        PrtMsg( ERR | CHANGING_DIR, path );
         return( RET_ERROR );
     }
     return( RET_SUCCESS );
@@ -1373,8 +1342,8 @@ STATIC RET_T handleRMSyntaxError( void )
     return( RET_ERROR );
 }
 
-STATIC RET_T getRMArgs( char *line, rm_flags *flags, const char **name )
-/***********************************************************************
+STATIC RET_T getRMArgs( char *line, rm_flags *flags, char **name )
+/*****************************************************************
  * returns RET_WARN when there are no more arguments
  */
 {
@@ -1633,7 +1602,8 @@ STATIC RET_T handleRM( char *cmd )
 {
     rm_flags    flags;
     RET_T       rt;
-    const char  *name;
+    char        *name;
+    char        *p;
 
 #ifdef DEVELOPMENT
     PrtMsg( DBG | INF | INTERPRETING, dosInternals[COM_RM] );
@@ -1642,8 +1612,10 @@ STATIC RET_T handleRM( char *cmd )
     if( Glob.noexec )
         return( RET_SUCCESS );
 
-    for( rt = getRMArgs( cmd, &flags, &name ); rt == RET_SUCCESS; rt = getRMArgs( NULL, NULL, &name ) ) {
-        RemoveDoubleQuotes( (char *)name, strlen( name ) + 1, name );
+    for( rt = getRMArgs( cmd, &flags, &p ); rt == RET_SUCCESS; rt = getRMArgs( NULL, NULL, &p ) ) {
+        // handle LFN
+        p = GetFixFNameLong( p, &name, true );
+        *p = NULLCHAR;      /* terminate file name */
         if( !processRM( name, &flags ) ) {
             return( RET_ERROR );
         }
@@ -1792,16 +1764,18 @@ STATIC RET_T shellSpawn( char *cmd, shell_flags flags )
 
     assert( cmd != NULL );
 
-    percent_cmd = cmd[0] == '%';
-    arg = cmd + (percent_cmd ? 1 : 0);      /* split cmd name from args */
-
-    quote = false;                          /* no quotes yet */
-    while( !((cisws( *arg ) || *arg == Glob.swchar || *arg == '+' ||
-        *arg == '=' ) && !quote) && *arg != NULLCHAR ) {
+    percent_cmd = ( cmd[0] == '%' );
+    /* split cmd name from args */
+    quote = false;    /* no quotes yet */
+    for( arg = cmd + (percent_cmd ? 1 : 0); *arg != NULLCHAR; arg++ ) {
+        if( !quote ) {
+            if( cisws( *arg ) || *arg == Glob.swchar || *arg == '+' || *arg == '=' ) {
+                break;
+            }
+        }
         if( *arg == '\"' ) {
             quote = !quote;     /* found a quote */
         }
-        ++arg;
     }
     if( arg - cmd >= _MAX_PATH ) {
         PrtMsg( ERR | COMMAND_TOO_LONG );
@@ -1832,7 +1806,7 @@ STATIC RET_T shellSpawn( char *cmd, shell_flags flags )
         _splitpath( cmdname, NULL, NULL, NULL, ext );
         if( ext[0] == '.' ) {
             FixName( ext );
-            /* if extension specified let the shell handle it (26-apr-91) */
+            /* if extension specified let the shell handle it */
             if( !FNameEq( ext, ".exe" ) && !FNameEq( ext, ".com" ) ) {
                 flags |= FLAG_SHELL; /* .bat and .cmd need the shell anyway */
             }
@@ -1840,9 +1814,9 @@ STATIC RET_T shellSpawn( char *cmd, shell_flags flags )
     }
 #endif
     comnum = findInternal( cmdname );
-    if( (flags & FLAG_SILENT) == 0 ||
-        (Glob.noexec && (comnum != COM_FOR && comnum != COM_IF || (flags & FLAG_SHELL)) &&
-        !percent_cmd) ) {
+    if( (flags & FLAG_SILENT) == 0
+      || (Glob.noexec && (comnum != COM_FOR && comnum != COM_IF || (flags & FLAG_SHELL))
+      && !percent_cmd) ) {
         if( !Glob.noheader && !Glob.compat_posix ) {
             PrtMsg( INF | NEOL | JUST_A_TAB );
         }
