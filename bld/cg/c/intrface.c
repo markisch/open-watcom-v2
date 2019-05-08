@@ -373,52 +373,53 @@ patch_handle _CGAPI     BEPatch( void )
 /*************************************/
 {
 #ifndef NDEBUG
-    patch_handle retn;
+    patch_handle patch;
 
     EchoAPI( "BEPatch()" );
-    retn = BGNewPatch();
-    EchoAPI( " -> %P\n", retn );
-    hdlAdd( PATCH_HANDLE, retn );
-    return retn;
+    patch = BGNewPatch();
+    EchoAPI( " -> %P\n", patch );
+    hdlAdd( PATCH_HANDLE, patch );
+    return( patch );
 #else
     return( BGNewPatch() );
 #endif
 }
 
-cg_name _CGAPI          CGPatchNode( patch_handle hdl, cg_type tipe )
-/*******************************************************************/
+cg_name _CGAPI          CGPatchNode( patch_handle patch, cg_type tipe )
+/*********************************************************************/
 {
 #ifndef NDEBUG
-    cg_name retn;
-    EchoAPI( "CGPatchNode( %P, %t )", hdl, tipe );
-    hdlExists( PATCH_HANDLE, hdl );
-    retn = BGPatchNode( hdl, TypeAddress( tipe ) );
+    cg_name     retn;
+
+    EchoAPI( "CGPatchNode( %P, %t )", patch, tipe );
+    hdlExists( PATCH_HANDLE, patch );
+    retn = BGPatchNode( patch, TypeAddress( tipe ) );
     hdlAdd( CG_NAMES, retn );
     return EchoAPICgnameReturn( retn );
 #else
-    return( BGPatchNode( hdl, TypeAddress( tipe ) ) );
+    return( BGPatchNode( patch, TypeAddress( tipe ) ) );
 #endif
 }
 
-void _CGAPI     BEPatchInteger( patch_handle hdl, signed_32 value )
-/*****************************************************************/
+void _CGAPI     BEPatchInteger( patch_handle patch, signed_32 value )
+/*******************************************************************/
 {
 #ifndef NDEBUG
-    EchoAPI( "BEPatchInteger( %P, %x )\n", hdl, value );
-    hdlExists( PATCH_HANDLE, hdl );
+    EchoAPI( "BEPatchInteger( %P, %x )\n", patch, value );
+    hdlExists( PATCH_HANDLE, patch );
 #endif
-    BGPatchInteger( hdl, value );
+    BGPatchInteger( patch, value );
 }
 
-void _CGAPI     BEFiniPatch( patch_handle hdl )
-/*********************************************/
+void _CGAPI     BEFiniPatch( patch_handle patch )
+/***********************************************/
 {
 #ifndef NDEBUG
-    EchoAPI( "BEFiniPatch( %P )\n", hdl );
-    hdlUseOnce( PATCH_HANDLE, hdl );
+    EchoAPI( "BEFiniPatch( %P )\n", patch );
+    hdlUseOnce( PATCH_HANDLE, patch );
 #endif
 
-    BGFiniPatch( hdl );
+    BGFiniPatch( patch );
 }
 
 
@@ -692,7 +693,7 @@ cg_name _CGAPI CGVarargsBasePtr( cg_type tipe )
 /*********************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGVarargsBasePtr( %t )", tipe );
     retn = TGLeaf( BGVarargsBasePtr( TypeAddress( tipe ) ) );
@@ -707,7 +708,7 @@ cg_name _CGAPI CGInteger( signed_32 val, cg_type tipe )
 /*****************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGInteger( %i, %t )", val, tipe );
     verifyNotUserType( tipe );
@@ -723,7 +724,8 @@ cg_name _CGAPI CGInt64( signed_64 val, cg_type tipe )
 /***************************************************/
 {
 #ifndef NDEBUG
-    tn retn;
+    cg_name     retn;
+
     EchoAPI( "CGInt64( %x %x, %t )"
            , val.u._32[I64LO32]
            , val.u._32[I64HI32]
@@ -741,7 +743,7 @@ cg_name _CGAPI CGFloat( cchar_ptr num, cg_type tipe )
 /***************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGFloat( %c, %t )", num, tipe );
     verifyNotUserType( tipe );
@@ -758,7 +760,7 @@ cg_name _CGAPI CGBigInt( float_handle f, cg_type tipe )
 /*****************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGBigInt( %x, %t )", f, tipe );
     verifyNotUserType( tipe );
@@ -802,7 +804,7 @@ cg_name _CGAPI CGBackName( back_handle bck, cg_type tipe )
 /********************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGBackName( %B, %t )", bck, tipe );
 #endif
@@ -823,7 +825,7 @@ cg_name _CGAPI CGTempName( temp_handle temp, cg_type tipe )
 /*********************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGTempName( %T, %t )", temp, tipe );
     retn = TGLeaf( BGTempName( (name *)temp, TypeAddress( TY_POINTER ) ) );
@@ -858,7 +860,7 @@ cg_name _CGAPI CGAssign( cg_name dest, cg_name source, cg_type tipe )
 /*******************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGAssign( %n, %n, %t )", dest, source, tipe );
     hdlUseOnce( CG_NAMES, dest );
@@ -911,7 +913,7 @@ cg_name _CGAPI CGPreGets( cg_op op, cg_name dest, cg_name src, cg_type tipe )
 /***************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGPreGets( %o, %n, %n, %t )", op, dest, src, tipe );
     hdlUseOnce( CG_NAMES, dest );
@@ -928,7 +930,7 @@ cg_name _CGAPI CGLVPreGets( cg_op op, cg_name dest, cg_name src, cg_type tipe )
 /*****************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGLVPreGets( %o, %n, %n, %t )", op, dest, src, tipe );
     hdlUseOnce( CG_NAMES, dest );
@@ -949,7 +951,7 @@ cg_name _CGAPI CGBinary( cg_op op, cg_name name1, cg_name name2, cg_type tipe )
 /*****************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGBinary( %o, %n, %n, %t )", op, name1, name2, tipe );
     hdlUseOnce( CG_NAMES, name1 );
@@ -974,7 +976,7 @@ cg_name _CGAPI CGUnary( cg_op op, cg_name name, cg_type tipe )
 /************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGUnary( %o, %n, %t )", op, name, tipe );
     hdlUseOnce( CG_NAMES, name );
@@ -1004,13 +1006,13 @@ call_handle _CGAPI  CGInitCall( cg_name name, cg_type tipe, cg_sym_handle sym )
 /*****************************************************************************/
 {
 #ifndef NDEBUG
-    tn  retn;
+    call_handle  call;
 
     EchoAPI( "CGInitCall( %n, %t, %s )", name, tipe, sym );
     hdlUseOnce( CG_NAMES, name );
-    retn = TGInitCall( name, TypeAddress( tipe ), sym );
-    hdlAddUnary( CG_NAMES, retn, name );
-    return EchoAPICallHandleReturn( retn );
+    call = TGInitCall( name, TypeAddress( tipe ), sym );
+    hdlAddUnary( CG_NAMES, call, name );
+    return( EchoAPICallHandleReturn( call ) );
 #else
     return( TGInitCall( name, TypeAddress( tipe ), sym ) );
 #endif
@@ -1031,7 +1033,7 @@ cg_name _CGAPI CGCall( call_handle call )
 /***************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGCall( %C )\n", call );
     hdlUseOnce( CG_NAMES, call );
@@ -1051,7 +1053,7 @@ cg_name _CGAPI CGCompare( cg_op op, cg_name name1, cg_name name2, cg_type tipe )
 /******************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGCompare( %o, %n, %n, %t )", op, name1, name2, tipe );
     hdlUseOnce( CG_NAMES, name1 );
@@ -1068,7 +1070,7 @@ cg_name _CGAPI CGFlow( cg_op op, cg_name name1, cg_name name2 )
 /*************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGFlow( %o, %n, %n )", op, name1, name2 );
     hdlUseOnce( CG_NAMES, name1 );
@@ -1091,7 +1093,7 @@ cg_name _CGAPI CGChoose( cg_name sel, cg_name n1, cg_name n2, cg_type tipe )
 /**************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGChoose( %n, %n, %n, %t )", sel, n1, n2, tipe );
     hdlUseOnce( CG_NAMES, sel );
@@ -1109,7 +1111,7 @@ cg_name _CGAPI CGWarp( cg_name before, label_handle label, cg_name after )
 /************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGWarp( %n, %L, %n )", before, label, after );
     if( before != NULL ) { // Fortran calls with NULL first parm
@@ -1129,7 +1131,7 @@ cg_name _CGAPI  CGCallback( cg_callback func, callback_handle parm )
 /******************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGCallback( %x, %x )", func, parm );
     retn = TGCallback( func, parm );
@@ -1318,7 +1320,7 @@ cg_name _CGAPI CGBitMask( cg_name left, byte start, byte len, cg_type tipe )
 /**************************************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGBitMask( %n, %x, %x, %t )", left, start, len, tipe );
     hdlUseOnce( CG_NAMES, left );
@@ -1334,7 +1336,7 @@ cg_name _CGAPI CGVolatile( cg_name name )
 /***************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGVolatile( %n )", name );
     hdlUseOnce( CG_NAMES, name );
@@ -1350,7 +1352,7 @@ cg_name _CGAPI CGAttr( cg_name name, cg_sym_attr attr )
 /*****************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGAttr( %n, %i )", name, attr );
     hdlUseOnce( CG_NAMES, name );
@@ -1367,7 +1369,7 @@ cg_name _CGAPI CGAlign( cg_name name, uint alignment )
 /****************************************************/
 {
 #ifndef NDEBUG
-    tn      retn;
+    cg_name     retn;
 
     EchoAPI( "CGAlign( %n, %i )", name, alignment );
     hdlUseOnce( CG_NAMES, name );
