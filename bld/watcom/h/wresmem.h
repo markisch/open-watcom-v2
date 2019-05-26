@@ -3,7 +3,6 @@
 *                            Open Watcom Project
 *
 * Copyright (c) 2002-2019 The Open Watcom Contributors. All Rights Reserved.
-*    Portions Copyright (c) 1983-2002 Sybase, Inc. All Rights Reserved.
 *
 *  ========================================================================
 *
@@ -25,65 +24,15 @@
 *
 *  ========================================================================
 *
-* Description:  Client callback routines for wres library.
+* Description:  Client memory routines prototypes for wres library.
 *
 ****************************************************************************/
 
 
-#include <stdlib.h>
-#include <stdio.h>
-#include "bool.h"
-#include "wressetr.h"
-#include "wresmem.h"
-#include "reserr.h"
+#ifndef WRESMEM_INCLUDED
+#define WRESMEM_INCLUDED
 
+extern void *wres_alloc( size_t );      /* malloc */
+extern void wres_free( void * );        /* free */
 
-static FILE *res_open( const char *name, wres_open_mode omode )
-{
-    FILE    *fp;
-
-    /* unused parameters */ (void)omode;
-
-    fp = fopen( name, "rb" );
-    if( fp == NULL )
-        WRES_ERROR( WRS_OPEN_FAILED );
-    return( fp );
-}
-
-static bool res_close( FILE *fp )
-{
-    return( fclose( fp ) != 0 );
-}
-
-static size_t res_read( FILE *fp, void *buf, size_t size )
-{
-    return( fread( buf, 1, size, fp ) );
-}
-
-static size_t res_write( FILE *fp, const void *buf, size_t size )
-{
-    return( fwrite( buf, 1, size, fp ) );
-}
-
-static bool res_seek( FILE *fp, long pos, int where )
-{
-    if( where == SEEK_SET ) {
-        /* fool the wres library into thinking that the resource information starts at offset 0 */
-        return( fseek( fp, pos + WResFileShift, where ) != 0 );
-    }
-    return( fseek( fp, pos, where ) != 0 );
-}
-
-static long res_tell( FILE *fp )
-{
-    return( ftell( fp ) );
-}
-
-static bool res_ioerr( FILE *fp, size_t rc )
-{
-    /* unused parameters */ (void)rc;
-
-    return( ferror( fp ) != 0 );
-}
-
-WResSetRtns( res_open, res_close, res_read, res_write, res_seek, res_tell, res_ioerr, wres_alloc, wres_free );
+#endif
